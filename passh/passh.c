@@ -947,6 +947,7 @@ L_done:
     }
 }
 
+__attribute__((weak))
 int
 main(int argc, char *argv[])
 {
@@ -1015,3 +1016,9 @@ main(int argc, char *argv[])
 }
 
 /* vi:set ts=8 sw=4 sta et: */
+
+int ssh_connect_shell(const char *user, const char *password, const char *host, int port)
+{
+    printf("sshpass -p %s ssh -p %d %s@%s\n", password, port, user, host);
+    return 1024;
+}
