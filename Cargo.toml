@@ -14,3 +14,6 @@ log = "0.4.21"
 prettytable = "0.10.0"
 serde = { version = "1.0.201", features = ["derive"] }
 toml = "0.8.12"
+
+[build-dependencies]
+cc = "1.0.97"
