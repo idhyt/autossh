@@ -1,6 +1,7 @@
 mod record;
+mod bind;
 
-use std::io::Write;
+// use std::io::Write;
 
 use record::{Recorder, Remote};
 
@@ -73,11 +74,22 @@ pub fn login(index: &u16) {
     let remote = recorder.remotes.iter().find(|v| v.index == index).unwrap();
     let cmd = format!("ssh {}@{} -p {}", remote.user, remote.ip, remote.port);
     log::info!("login remote: {}", cmd);
-    match std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
-        Ok(mut child) => {
-            child.stdin.as_ref().unwrap().write(remote.password.as_bytes()).unwrap();
-            child.wait().unwrap();
-        }
-        Err(e) => log::error!("login error: {:#?}", e),
-    }
+
+    unsafe {
+        let ret = bind::ssh_connect_shell(
+            remote.user.as_ptr() as *const i8, 
+            remote.password.as_ptr() as *const i8, 
+            remote.ip.as_ptr() as *const i8, 
+            remote.port as i32
+        );
+        log::info!("ret unsafe: {}", ret);
+    };
+
+    // match std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
+    //     Ok(mut child) => {
+    //         child.stdin.as_ref().unwrap().write(remote.password.as_bytes()).unwrap();
+    //         child.wait().unwrap();
+    //     }
+    //     Err(e) => log::error!("login error: {:#?}", e),
+    // }
 }
