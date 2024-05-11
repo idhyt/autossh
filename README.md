@@ -29,7 +29,7 @@ Options:
     +-------+--------+-------+---------+------+
 ```
 
-## remove/rm
+## remove/rm/delete/del
 
 ```bash
 ❯ ./autossh remove -i 1
