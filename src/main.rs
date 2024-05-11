@@ -28,7 +28,7 @@ enum Commands {
         name: Option<String>,
     },
     /// Remove the remote server by index.
-    #[clap(aliases = &["remove","rm"])]
+    #[clap(aliases = &["rm", "del", "delete"])]
     Remove {
         /// the index of the remote server.
         #[arg(short, long)]
@@ -75,11 +75,11 @@ fn main() {
         Some(Commands::Remove { index }) => {
             remove(index);
         }
-        None => {
-            list();
-        }
         Some(Commands::Login { index }) => {
             login(index);
+        }
+        None => {
+            list();
         }
     }
 
