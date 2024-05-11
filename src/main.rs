@@ -28,6 +28,7 @@ enum Commands {
         name: Option<String>,
     },
     /// Remove the remote server by index.
+    #[clap(aliases = &["remove","rm"])]
     Remove {
         /// the index of the remote server.
         #[arg(short, long)]
