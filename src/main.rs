@@ -8,6 +8,7 @@ mod ssh;
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// List the remote server.
+    #[clap(aliases = &["ls", "l"])]
     List {},
     /// Add the remote server.
     Add {

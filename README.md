@@ -38,7 +38,7 @@ Options:
 +-------+------+------+----+------+
 ```
 
-## list
+## list/ls/l
 
 ```bash
 ❯ ./autossh list
