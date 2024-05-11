@@ -1,5 +1,5 @@
-mod record;
 mod bind;
+mod record;
 
 // use std::io::Write;
 
@@ -76,20 +76,25 @@ pub fn login(index: &u16) {
     log::info!("login remote: {}", cmd);
 
     unsafe {
-        let ret = bind::ssh_connect_shell(
-            remote.user.as_ptr() as *const i8, 
-            remote.password.as_ptr() as *const i8, 
-            remote.ip.as_ptr() as *const i8, 
-            remote.port as i32
-        );
-        log::info!("ret unsafe: {}", ret);
+        // passh -c 10 -p password ssh -p port user@ip
+        let argv = vec![
+            std::ffi::CString::new("passh").unwrap().into_raw(),
+            std::ffi::CString::new("-c").unwrap().into_raw(),
+            std::ffi::CString::new("10").unwrap().into_raw(),
+            std::ffi::CString::new("-p").unwrap().into_raw(),
+            std::ffi::CString::new(remote.password.clone())
+                .unwrap()
+                .into_raw(),
+            std::ffi::CString::new("ssh").unwrap().into_raw(),
+            std::ffi::CString::new("-p").unwrap().into_raw(),
+            std::ffi::CString::new(remote.port.to_string())
+                .unwrap()
+                .into_raw(),
+            std::ffi::CString::new(format!("{}@{}", remote.user, remote.ip))
+                .unwrap()
+                .into_raw(),
+        ];
+        let argc = argv.len() as i32;
+        bind::passh(argc, argv.as_ptr() as *mut *mut std::os::raw::c_char);
     };
-
-    // match std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
-    //     Ok(mut child) => {
-    //         child.stdin.as_ref().unwrap().write(remote.password.as_bytes()).unwrap();
-    //         child.wait().unwrap();
-    //     }
-    //     Err(e) => log::error!("login error: {:#?}", e),
-    // }
 }
