@@ -947,10 +947,15 @@ L_done:
     }
 }
 
-__attribute__((weak))
 int
-main(int argc, char *argv[])
+passh(int argc, char *argv[])
 {
+// -DDEBUG
+#ifdef DEBUG
+    printf("passh -> ffi, argc = %d, argv[0] = %s, argv[1] = %s, ..., argv[...] = %s\n", 
+        argc, argv[0], argv[1], argv[argc - 1]
+    );
+#endif
     char slave_name[32];
     pid_t pid;
     struct termios orig_termios;
@@ -1017,8 +1022,14 @@ main(int argc, char *argv[])
 
 /* vi:set ts=8 sw=4 sta et: */
 
-int ssh_connect_shell(const char *user, const char *password, const char *host, int port)
+__attribute__((weak))
+int main(int argc, char *argv[])
 {
-    printf("sshpass -p %s ssh -p %d %s@%s\n", password, port, user, host);
-    return 1024;
+    return passh(argc, argv);
 }
+
+// int ssh_connect_shell(const char *user, const char *password, const char *host, int port)
+// {
+//     printf("sshpass -p %s ssh -p %d %s@%s\n", password, port, user, host);
+//     return 1024;
+// }
