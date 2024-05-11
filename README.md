@@ -22,31 +22,31 @@ Options:
 
 ```bash
 ❯ ./autossh add -u idhyt -p "[p4ssw0rd}" -i 1.2.3.4 -n Ubuntu
-    +-------+--------+-------+---------+------+
-    | index | name   | user  | ip      | port |
-    +-------+--------+-------+---------+------+
-    | 1     | Ubuntu | idhyt | 1.2.3.4 | 22   |
-    +-------+--------+-------+---------+------+
++-------+--------+-------+---------+------+
+| index | name   | user  | ip      | port |
++-------+--------+-------+---------+------+
+| 1     | Ubuntu | idhyt | 1.2.3.4 | 22   |
++-------+--------+-------+---------+------+
 ```
 
 ## remove/rm/delete/del
 
 ```bash
 ❯ ./autossh remove -i 1
-    +-------+------+------+----+------+
-    | index | name | user | ip | port |
-    +-------+------+------+----+------+
++-------+------+------+----+------+
+| index | name | user | ip | port |
++-------+------+------+----+------+
 ```
 
 ## list
 
 ```bash
 ❯ ./autossh list
-    +-------+--------+-------+---------+------+
-    | index | name   | user  | ip      | port |
-    +-------+--------+-------+---------+------+
-    | 1     | Ubuntu | idhyt | 1.2.3.4 | 22   |
-    +-------+--------+-------+---------+------+
++-------+--------+-------+---------+------+
+| index | name   | user  | ip      | port |
++-------+--------+-------+---------+------+
+| 1     | Ubuntu | idhyt | 1.2.3.4 | 22   |
++-------+--------+-------+---------+------+
 ```
 
 ## login
@@ -58,3 +58,11 @@ Welcome to Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-156-generic x86_64)
 ```
 
 🍻 Thanks [passh](https://github.com/clarkwang/passh)
+
+There are still some issues that need to be resolved for `passh`
+
+```bash
+❯ ./autossh login -i 1
+!! can't execute: ssh: Bad address (14)
+```
+ensure the ssh info correct and execute several times.
