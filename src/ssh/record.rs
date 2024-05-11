@@ -1,5 +1,5 @@
 use directories::UserDirs;
-use prettytable::{Row, Table};
+use prettytable::{color, Attr, Cell, Row, Table};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -56,22 +56,40 @@ impl Recorder {
 
     pub fn pprint(&self) {
         let mut table = Table::new();
-        table.add_row(Row::from(vec![
-            "index".to_string(),
-            "name".to_string(),
-            "user".to_string(),
-            "ip".to_string(),
-            "port".to_string(),
+        // table.add_row(Row::from(vec![
+        //     "index".to_string(),
+        //     "name".to_string(),
+        //     "user".to_string(),
+        //     "ip".to_string(),
+        //     "port".to_string(),
+        // ]));
+        table.set_titles(Row::new(vec![
+            Cell::new("index").with_style(Attr::Bold),
+            Cell::new("name").with_style(Attr::Bold),
+            Cell::new("user").with_style(Attr::Bold),
+            Cell::new("ip").with_style(Attr::Bold),
+            Cell::new("port").with_style(Attr::Bold),
         ]));
         for remote in self.remotes.iter() {
-            table.add_row(Row::from(vec![
-                format!("{}", remote.index),
-                remote.name.clone().unwrap(),
-                remote.user.clone(),
-                remote.ip.clone(),
-                format!("{}", remote.port),
+            // table.add_row(Row::from(vec![
+            //     format!("{}", remote.index),
+            //     remote.name.clone().unwrap(),
+            //     remote.user.clone(),
+            //     remote.ip.clone(),
+            //     format!("{}", remote.port),
+            // ]));
+            table.add_row(Row::new(vec![
+                Cell::new(&remote.index.to_string())
+                    .with_style(Attr::Bold)
+                    .with_style(Attr::ForegroundColor(color::BLUE)),
+                Cell::new(&remote.name.clone().unwrap_or_else(|| remote.ip.clone()))
+                    .with_style(Attr::ForegroundColor(color::BLUE)),
+                Cell::new(&remote.user).with_style(Attr::ForegroundColor(color::BLUE)),
+                Cell::new(&remote.ip).with_style(Attr::ForegroundColor(color::BLUE)),
+                Cell::new(&remote.port.to_string()).with_style(Attr::ForegroundColor(color::BLUE)),
             ]));
         }
-        log::info!("the remote list:\n{}", table);
+        log::debug!("the remote list:\n{}", table);
+        table.printstd();
     }
 }

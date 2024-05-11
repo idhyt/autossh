@@ -1,8 +1,6 @@
 mod bind;
 mod record;
 
-// use std::io::Write;
-
 use record::{Recorder, Remote};
 
 pub fn add(user: &str, password: &str, ip: &str, port: &u16, name: &Option<String>) {
@@ -33,7 +31,7 @@ pub fn add(user: &str, password: &str, ip: &str, port: &u16, name: &Option<Strin
     recorder.remotes.push(remote);
     recorder.save();
     recorder.pprint();
-    log::info!("add remote success");
+    log::debug!("add remote success");
 }
 
 pub fn list() {
@@ -56,7 +54,7 @@ pub fn remove(index: &u16) {
     recorder.remotes.retain(|v| v.index != index);
     recorder.save();
     recorder.pprint();
-    log::info!("remove remote success");
+    log::debug!("remove remote success");
 }
 
 pub fn login(index: &u16) {
@@ -73,7 +71,7 @@ pub fn login(index: &u16) {
     }
     let remote = recorder.remotes.iter().find(|v| v.index == index).unwrap();
     let cmd = format!("ssh {}@{} -p {}", remote.user, remote.ip, remote.port);
-    log::info!("login remote: {}", cmd);
+    log::debug!("login remote: {}", cmd);
 
     unsafe {
         // passh -c 10 -p password ssh -p port user@ip
