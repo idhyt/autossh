@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.83"
+base64 = "0.22.1"
+chacha20poly1305 = "0.10.1"
 clap = { version = "4.5.4", features = ["derive"] }
 directories = "5.0.1"
 env_logger = "0.11.3"
