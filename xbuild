@@ -33,4 +33,5 @@ cross build --release --target $platform
 
 [ -d "./dist" ] || mkdir -p dist
 cp target/$platform/release/autossh ./dist/autossh.$platform
+cd ./dist && tar -czvf autossh.$platform.tar.gz autossh.$platform && rm -rf autossh.$platform
 
