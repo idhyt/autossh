@@ -33,7 +33,7 @@ fn generate_key(key: Option<&str>) -> Vec<u8> {
 fn chacha_encrypt(cleartext: &str, key: &[u8]) -> Vec<u8> {
     let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(key));
     let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
-    let mut obsf = cipher.encrypt(&nonce, cleartext.as_bytes()).unwrap();
+    let mut obsf = cipher.encrypt(&nonce, cleartext.as_bytes()).expect("encrypt failed by chacha20");
     obsf.splice(..0, nonce.iter().copied());
     obsf
 }
@@ -43,7 +43,7 @@ fn chacha_decrypt(obsf: &[u8], key: &[u8]) -> String {
     let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(key));
     let (nonce, ciphertext) = obsf.split_at(NonceSize::to_usize());
     let nonce = GenericArray::from_slice(nonce);
-    let plaintext = cipher.decrypt(nonce, ciphertext).unwrap();
+    let plaintext = cipher.decrypt(nonce, ciphertext).expect("decrypt failed by chacha20");
     String::from_utf8(plaintext).unwrap()
 }
 
@@ -64,7 +64,7 @@ pub fn decrypt(data: &str) -> String {
     log::debug!("we found `ASKEY` and will decrypt.");
     let obsf = general_purpose::STANDARD_NO_PAD
         .decode(data.as_bytes())
-        .unwrap();
+        .expect("decode failed by base64");
     let key = generate_key(KEY.as_deref());
     chacha_decrypt(&obsf, &key)
 }
