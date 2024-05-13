@@ -57,6 +57,26 @@ Options:
 Welcome to Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-156-generic x86_64)
 ```
 
+## security
+
+the record file is location `$HOME/.autossh.toml`, you can change and backup it.
+
+🚨🚨🚨 note! the `password` fields is plaintext 🚨🚨🚨
+
+if you wish to encrypt it, import environment variables `ASKEY` before use.
+
+```bash
+❯ export ASKEY="protected"
+❯ autossh add -u root -p "password" -i 1.2.3.4 -n hello
++-------+---------------------+-------+--------------+------+
+| index | name                | user  | ip           | port |
++=======+=====================+=======+==============+======+
+| 1     | hello               | root  | 1.2.3.4      | 22   |
++-------+---------------------+-------+--------------+------+
+❯ cat ~/.autossh.toml | grep password
+password = "dsrO12SGroO+FmD0H0WUB3QvGpSl7TEysrPkDYKEIjUG6uEt"
+```
+
 🍻 Thanks [passh](https://github.com/clarkwang/passh)
 
 There are still some issues that need to be resolved for `passh`
