@@ -1,7 +1,9 @@
 use directories::UserDirs;
 use prettytable::{color, Attr, Cell, Row, Table};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::PathBuf;
+
+use super::secure::{decrypt, encrypt};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Remote {
@@ -10,6 +12,7 @@ pub struct Remote {
     /// the login user.
     pub user: String,
     /// the login password.
+    #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
     /// the login id address.
     pub ip: String,
@@ -17,6 +20,21 @@ pub struct Remote {
     pub port: u16,
     /// the alias name for the login.
     pub name: Option<String>,
+}
+
+fn depass<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let password = String::deserialize(deserializer)?;
+    Ok(decrypt(&password))
+}
+
+fn enpass<S>(password: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    Serialize::serialize(&encrypt(password), serializer)
 }
 
 // impl display for Remote
@@ -28,6 +46,7 @@ impl std::fmt::Display for Remote {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Recorder {
+    /// the remote server list.
     pub remotes: Vec<Remote>,
 }
 
@@ -43,8 +62,8 @@ impl Recorder {
             return Self::default();
         }
 
-        let content = std::fs::read_to_string(&file).unwrap();
-        let recorder: Recorder = toml::from_str(&content).unwrap();
+        let content = std::fs::read_to_string(&file).expect("read record file failed");
+        let recorder: Recorder = toml::from_str(&content).expect("parse record file failed");
         recorder
     }
 

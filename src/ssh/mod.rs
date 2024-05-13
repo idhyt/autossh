@@ -1,5 +1,6 @@
 mod bind;
 mod record;
+mod secure;
 
 use record::{Recorder, Remote};
 
