@@ -6,7 +6,7 @@ cross_info=$(
 2) aarch64-unknown-linux-musl
 3) x86_64-apple-darwin
 4) aarch64-apple-darwin
-选择目标平台的编号:
+Select the target platform number:
 EOF
 )
 
@@ -34,4 +34,4 @@ cross build --release --target $platform
 [ -d "./dist" ] || mkdir -p dist
 cp target/$platform/release/autossh ./dist/autossh.$platform
 cd ./dist && tar -czvf autossh.$platform.tar.gz autossh.$platform && rm -rf autossh.$platform
-
+echo "Build success, output file: dist/autossh.$platform.tar.gz"
