@@ -1,6 +1,7 @@
 mod bind;
 mod record;
 mod secure;
+mod server;
 
 use record::Recorder;
 
@@ -23,5 +24,5 @@ pub fn remove(index: &u16) {
 }
 
 pub fn login(index: &u16) {
-    Recorder::load().login(index);
+    Recorder::load().get(index).unwrap().login();
 }

@@ -6,7 +6,10 @@ use chacha20poly1305::ChaCha20Poly1305;
 
 lazy_static::lazy_static! {
     static ref KEY: Option<String> = match std::env::var("ASKEY") {
-        Ok(key) => Some(key),
+        Ok(key) => {
+            log::debug!("`ASKEY` found in environment variable.");
+            Some(key)
+        },
         Err(_) => None,
     };
 }
@@ -33,7 +36,9 @@ fn generate_key(key: Option<&str>) -> Vec<u8> {
 fn chacha_encrypt(cleartext: &str, key: &[u8]) -> Vec<u8> {
     let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(key));
     let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
-    let mut obsf = cipher.encrypt(&nonce, cleartext.as_bytes()).expect("encrypt failed by chacha20");
+    let mut obsf = cipher
+        .encrypt(&nonce, cleartext.as_bytes())
+        .expect("encrypt failed by chacha20");
     obsf.splice(..0, nonce.iter().copied());
     obsf
 }
@@ -43,7 +48,9 @@ fn chacha_decrypt(obsf: &[u8], key: &[u8]) -> String {
     let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(key));
     let (nonce, ciphertext) = obsf.split_at(NonceSize::to_usize());
     let nonce = GenericArray::from_slice(nonce);
-    let plaintext = cipher.decrypt(nonce, ciphertext).expect("decrypt failed by chacha20");
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .expect("decrypt failed by chacha20");
     String::from_utf8(plaintext).unwrap()
 }
 
@@ -51,7 +58,7 @@ pub fn encrypt(data: &str) -> String {
     if KEY.is_none() {
         return data.to_string();
     }
-    log::debug!("we found `ASKEY` and will encrypt.");
+    // log::debug!("we found `ASKEY` and will encrypt.");
     let key = generate_key(KEY.as_deref());
     let obsf = chacha_encrypt(data, &key);
     general_purpose::STANDARD_NO_PAD.encode(obsf)
@@ -61,7 +68,7 @@ pub fn decrypt(data: &str) -> String {
     if KEY.is_none() {
         return data.to_string();
     }
-    log::debug!("we found `ASKEY` and will decrypt.");
+    // log::debug!("we found `ASKEY` and will decrypt.");
     let obsf = general_purpose::STANDARD_NO_PAD
         .decode(data.as_bytes())
         .expect("decode failed by base64");
