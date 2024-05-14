@@ -12,8 +12,13 @@ pub fn add(user: &str, password: &str, ip: &str, port: &u16, name: &Option<Strin
     recorder.list();
 }
 
-pub fn list() {
-    Recorder::load().list();
+pub fn list(all: &bool) {
+    let recorder = Recorder::load();
+    if *all {
+        recorder.list_all();
+    } else {
+        recorder.list();
+    }
 }
 
 pub fn remove(index: &u16) {

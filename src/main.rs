@@ -9,7 +9,11 @@ mod ssh;
 enum Commands {
     /// List the remote server.
     #[clap(aliases = &["ls", "l"])]
-    List {},
+    List {
+        /// show all privacy info like password
+        #[arg(short, long, default_value = "false")]
+        all: bool,
+    },
     /// Add the remote server.
     Add {
         /// the login user.
@@ -61,8 +65,8 @@ fn main() {
     log::debug!("args: {:#?}", args);
 
     match &args.command {
-        Some(Commands::List {}) => {
-            list();
+        Some(Commands::List { all }) => {
+            list(all);
         }
         Some(Commands::Add {
             user,
@@ -80,7 +84,7 @@ fn main() {
             login(index);
         }
         None => {
-            list();
+            list(&false);
         }
     }
 

@@ -16,31 +16,24 @@ impl Recorder {
         UserDirs::new().unwrap().home_dir().join(".autossh.toml")
     }
 
-    fn pprint(&self) {
+    fn pprint(&self, all: bool) {
         let mut table = Table::new();
-        // table.add_row(Row::from(vec![
-        //     "index".to_string(),
-        //     "name".to_string(),
-        //     "user".to_string(),
-        //     "ip".to_string(),
-        //     "port".to_string(),
-        // ]));
-        table.set_titles(Row::new(vec![
+        let mut titles = vec![
             Cell::new("index").with_style(Attr::Bold),
             Cell::new("name").with_style(Attr::Bold),
             Cell::new("user").with_style(Attr::Bold),
             Cell::new("ip").with_style(Attr::Bold),
             Cell::new("port").with_style(Attr::Bold),
-        ]));
+        ];
+        if all {
+            titles.push(Cell::new("password").with_style(Attr::Bold));
+        }
+        // for title in titles.iter_mut() {
+        //     title.align(Alignment::CENTER);
+        // }
+        table.set_titles(Row::new(titles));
         for remote in self.remotes.iter() {
-            // table.add_row(Row::from(vec![
-            //     format!("{}", remote.index),
-            //     remote.name.clone().unwrap(),
-            //     remote.user.clone(),
-            //     remote.ip.clone(),
-            //     format!("{}", remote.port),
-            // ]));
-            table.add_row(Row::new(vec![
+            let mut row = vec![
                 Cell::new(&remote.index.to_string())
                     .with_style(Attr::Bold)
                     .with_style(Attr::ForegroundColor(color::BLUE)),
@@ -49,7 +42,13 @@ impl Recorder {
                 Cell::new(&remote.user).with_style(Attr::ForegroundColor(color::BLUE)),
                 Cell::new(&remote.ip).with_style(Attr::ForegroundColor(color::BLUE)),
                 Cell::new(&remote.port.to_string()).with_style(Attr::ForegroundColor(color::BLUE)),
-            ]));
+            ];
+            if all {
+                row.push(
+                    Cell::new(&remote.password).with_style(Attr::ForegroundColor(color::BLUE)),
+                );
+            }
+            table.add_row(Row::new(row));
         }
         log::debug!("the remote list:\n{}", table);
         table.printstd();
@@ -93,7 +92,11 @@ impl Recorder {
     }
 
     pub fn list(&self) {
-        self.pprint();
+        self.pprint(false);
+    }
+
+    pub fn list_all(&self) {
+        self.pprint(true);
     }
 
     pub fn add(
