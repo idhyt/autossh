@@ -1,7 +1,7 @@
 ## usage
 
 ```bash
-❯ ./autossh --help
+❯ autossh --help
 ssh manager and auto login tool
 
 Usage: autossh [COMMAND]
@@ -21,18 +21,18 @@ Options:
 ## add
 
 ```bash
-❯ ./autossh add -u idhyt -p "[p4ssw0rd}" -i 1.2.3.4 -n Ubuntu
+❯ autossh add -u idhyt -p "password" -i 1.2.3.4 -n ubuntu
 +-------+--------+-------+---------+------+
 | index | name   | user  | ip      | port |
-+-------+--------+-------+---------+------+
-| 1     | Ubuntu | idhyt | 1.2.3.4 | 22   |
++=======+========+=======+=========+======+
+| 1     | ubuntu | idhyt | 1.2.3.4 | 22   |
 +-------+--------+-------+---------+------+
 ```
 
 ## remove/rm/delete/del
 
 ```bash
-❯ ./autossh remove -i 1
+❯ autossh rm -i 1
 +-------+------+------+----+------+
 | index | name | user | ip | port |
 +-------+------+------+----+------+
@@ -41,18 +41,28 @@ Options:
 ## list/ls/l
 
 ```bash
-❯ ./autossh list
+❯ autossh ls
 +-------+--------+-------+---------+------+
 | index | name   | user  | ip      | port |
++=======+========+=======+=========+======+
+| 1     | ubuntu | idhyt | 1.2.3.4 | 22   |
 +-------+--------+-------+---------+------+
-| 1     | Ubuntu | idhyt | 1.2.3.4 | 22   |
-+-------+--------+-------+---------+------+
+```
+maybe `scp` something, add option parameter `-a/--all` to show password.
+
+```bash
+❯ autossh ls --all
++-------+--------+-------+---------+------+----------+
+| index | name   | user  | ip      | port | password |
++=======+========+=======+=========+======+==========+
+| 1     | ubuntu | idhyt | 1.2.3.4 | 22   | password |
++-------+--------+-------+---------+------+----------+
 ```
 
 ## login
 
 ```bash
-❯ ./autossh login -i 1
+❯ autossh login -i 1
 (idhyt@1.2.3.4) Password:
 Welcome to Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-156-generic x86_64)
 ```
@@ -67,14 +77,15 @@ if you wish to encrypt it, import environment variables `ASKEY` before use.
 
 ```bash
 ❯ export ASKEY="protected"
-❯ autossh add -u root -p "password" -i 1.2.3.4 -n hello
-+-------+---------------------+-------+--------------+------+
-| index | name                | user  | ip           | port |
-+=======+=====================+=======+==============+======+
-| 1     | hello               | root  | 1.2.3.4      | 22   |
-+-------+---------------------+-------+--------------+------+
+❯ autossh add -u idhyt -p "password" -i 1.2.3.4 -n ubuntu
+> autossh list --all
++-------+--------+-------+---------+------+----------+
+| index | name   | user  | ip      | port | password |
++=======+========+=======+=========+======+==========+
+| 1     | ubuntu | idhyt | 1.2.3.4 | 22   | password |
++-------+--------+-------+---------+------+----------+
 ❯ cat ~/.autossh.toml | grep password
-password = "dsrO12SGroO+FmD0H0WUB3QvGpSl7TEysrPkDYKEIjUG6uEt"
+password = "IiaMr0ce4iKF5AvXf+rtFQ9mET0Ug4hLOoGeybzyOQx/lUvh"
 ```
 
 🍻 Thanks [passh](https://github.com/clarkwang/passh)
