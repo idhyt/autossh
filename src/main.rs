@@ -1,9 +1,20 @@
 use clap::{Parser, Subcommand};
 use env_logger;
 
-use ssh::{add, list, login, remove};
+use ssh::{add, list, login, remove, run_copy};
 
 mod ssh;
+
+#[derive(Subcommand, Debug)]
+enum Runs {
+    /// Copy command.
+    #[clap(aliases = &["cp", "scp"])]
+    Copy {
+        /// the index of the remote server.
+        #[arg(short, long)]
+        index: u16,
+    },
+}
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -44,6 +55,12 @@ enum Commands {
         /// the index of the remote server.
         #[arg(short, long)]
         index: u16,
+    },
+    /// TODO impl some command.
+    #[clap(alias = "cmd")]
+    Command {
+        #[command(subcommand)]
+        command: Runs,
     },
 }
 
@@ -86,6 +103,11 @@ fn main() {
         None => {
             list(&false);
         }
+        Some(Commands::Command { command }) => match command {
+            Runs::Copy { index } => {
+                run_copy(index);
+            }
+        },
     }
 
     std::process::exit(0);

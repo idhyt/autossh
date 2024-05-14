@@ -31,3 +31,19 @@ pub fn remove(index: &u16) {
 pub fn login(index: &u16) {
     Recorder::load().get(index).unwrap().login();
 }
+
+pub fn run_copy(index: &u16) {
+    let recorder = Recorder::load();
+    let remote = recorder.get(index).unwrap();
+    log::info!(
+        r#"copy command example:
+    > scp -P {p} /path/to/local {u}@{i}:/path/to/remote
+    > rsync -rvzhP --port={p} /path/to/local {u}@{i}:/path/to/remote
+    > passowrd: {pass}
+        "#,
+        p = &remote.port,
+        u = &remote.user,
+        i = &remote.ip,
+        pass = &remote.password
+    );
+}
