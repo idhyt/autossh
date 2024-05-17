@@ -21,13 +21,15 @@ Options:
 ## add
 
 ```bash
-❯ autossh add -u idhyt -p "password" -i 1.2.3.4 -n ubuntu
+❯ autossh add -u idhyt -p password -i 1.2.3.4 -n ubuntu
 +-------+--------+-------+---------+------+
 | index | name   | user  | ip      | port |
 +=======+========+=======+=========+======+
 | 1     | ubuntu | idhyt | 1.2.3.4 | 22   |
 +-------+--------+-------+---------+------+
 ```
+
+note! the password need to be escaped if there are special characters in it. you can refer to the following [which-characters-need-to-be-escaped-when-using-bash](https://stackoverflow.com/questions/15783701/which-characters-need-to-be-escaped-when-using-bash)
 
 ## remove/rm/delete/del
 
@@ -77,7 +79,7 @@ if you wish to encrypt it, import environment variables `ASKEY` before use.
 
 ```bash
 ❯ export ASKEY="protected"
-❯ autossh add -u idhyt -p "password" -i 1.2.3.4 -n ubuntu
+❯ autossh add -u idhyt -p password -i 1.2.3.4 -n ubuntu
 > autossh list --all
 +-------+--------+-------+---------+------+----------+
 | index | name   | user  | ip      | port | password |
