@@ -3,7 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::bind::passh;
 use super::secure::{decrypt, encrypt};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
     /// the index of the remote server.
     pub index: u16,
@@ -18,6 +18,8 @@ pub struct Remote {
     pub port: u16,
     /// the alias name for the login.
     pub name: Option<String>,
+    /// the note for the server.
+    pub note: Option<String>,
 }
 
 fn depass<'de, D>(deserializer: D) -> Result<String, D::Error>

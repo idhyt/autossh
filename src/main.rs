@@ -42,13 +42,16 @@ enum Commands {
         /// the alias name for the login.
         #[arg(short, long)]
         name: Option<String>,
+        /// the note for the server, like expire time or other info.
+        #[arg(short = 'N', long)]
+        note: Option<String>,
     },
     /// Remove the remote server by index.
     #[clap(aliases = &["rm", "del", "delete"])]
     Remove {
         /// the index of the remote server.
-        #[arg(short, long)]
-        index: u16,
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+        index: Vec<u16>,
     },
     /// Login the remote server by index.
     Login {
@@ -91,8 +94,9 @@ fn main() {
             ip,
             port,
             name,
+            note,
         }) => {
-            add(user, password, ip, port, name);
+            add(user, password, ip, port, name, note);
         }
         Some(Commands::Remove { index }) => {
             remove(index);

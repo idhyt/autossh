@@ -5,9 +5,9 @@ mod server;
 
 use record::Recorder;
 
-pub fn add(user: &str, password: &str, ip: &str, port: &u16, name: &Option<String>) {
+pub fn add(user: &str, password: &str, ip: &str, port: &u16, name: &Option<String>, note: &Option<String>) {
     let mut recorder = Recorder::load();
-    let index = recorder.add(user, password, ip, port, name);
+    let index = recorder.add(user, password, ip, port, name, note);
     log::debug!("add remote success, index {}", index);
     recorder.list();
 }
@@ -21,7 +21,7 @@ pub fn list(all: &bool) {
     }
 }
 
-pub fn remove(index: &u16) {
+pub fn remove(index: &Vec<u16>) {
     let mut recorder = Recorder::load();
     let index = recorder.delete(index);
     log::debug!("remove remote success, index {}", index);
