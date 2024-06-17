@@ -29,6 +29,8 @@ Options:
 +-------+--------+-------+---------+------+
 ```
 
+add other server info by `-N/--note` option, like `-N "expired at 2022-11-11"`
+
 note! the password need to be escaped if there are special characters in it. you can refer to the following [which-characters-need-to-be-escaped-when-using-bash](https://stackoverflow.com/questions/15783701/which-characters-need-to-be-escaped-when-using-bash)
 
 ## remove/rm/delete/del
@@ -39,6 +41,8 @@ note! the password need to be escaped if there are special characters in it. you
 | index | name | user | ip | port |
 +-------+------+------+----+------+
 ```
+
+remove multiple records by `rm -i 1 2 3 ...`
 
 ## list/ls/l
 
