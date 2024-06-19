@@ -10,7 +10,10 @@ lazy_static::lazy_static! {
             log::debug!("`ASKEY` found in environment variable.");
             Some(key)
         },
-        Err(_) => None,
+        Err(_) => {
+            log::warn!("💥 export `ASKEY` to protect password! 💥");
+            None
+        },
     };
 }
 
