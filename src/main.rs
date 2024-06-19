@@ -82,7 +82,7 @@ struct Cli {
 fn main() {
     let args = Cli::parse();
     env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"));
-    log::debug!("args: {:#?}", args);
+    // log::debug!("args: {:#?}", args);
 
     match &args.command {
         Some(Commands::List { all }) => {

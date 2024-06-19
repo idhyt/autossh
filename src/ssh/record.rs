@@ -48,7 +48,7 @@ impl Recorder {
                     .collect::<Vec<Cell>>(),
             ));
         }
-        log::debug!("the remote list:\n{}", table);
+        log::debug!("the remote list:\n{:#?}", self.remotes);
         table.printstd();
     }
 
@@ -80,10 +80,10 @@ impl Recorder {
     pub fn load() -> Self {
         let file = Self::file();
         if !file.is_file() {
-            log::debug!("record file not found in {}", file.display());
+            // log::debug!("record file not found in {}", file.display());
             return Self::default();
         }
-
+        log::debug!("the record data located in `{}`", file.display());
         let content = std::fs::read_to_string(&file).expect("read record file failed");
         let recorder: Recorder = toml::from_str(&content).expect("parse record file failed");
         recorder
@@ -94,7 +94,6 @@ impl Recorder {
     }
 
     pub fn list_all(&self) {
-        log::info!("the record data located in `{}`", Self::file().display());
         self.pprint(true);
     }
 
@@ -124,12 +123,12 @@ impl Recorder {
         index
     }
 
-    pub fn delete(&mut self, index: &Vec<u16>) -> bool {
+    pub fn delete(&mut self, index: &Vec<u16>) -> u16 {
         // let index = *index;
         // self.remotes.retain(|v| v.index != index);
         self.remotes.retain(|v| !index.contains(&v.index));
         self.save();
         // index
-        true
+        self.remotes.len() as u16
     }
 }

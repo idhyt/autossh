@@ -23,8 +23,8 @@ pub fn list(all: &bool) {
 
 pub fn remove(index: &Vec<u16>) {
     let mut recorder = Recorder::load();
-    let index = recorder.delete(index);
-    log::debug!("remove remote success, index {}", index);
+    let left = recorder.delete(index);
+    log::debug!("remove remote success, {} index left", left);
     recorder.list();
 }
 
