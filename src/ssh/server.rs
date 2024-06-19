@@ -1,5 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+#[cfg(target_family = "unix")]
 use super::bind::passh;
 use super::secure::{decrypt, encrypt};
 
@@ -45,6 +46,7 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
+    #[cfg(target_family = "unix")]
     pub fn login(&self) {
         log::debug!("login at: {}", self);
 
@@ -70,5 +72,10 @@ impl Remote {
             let argc = argv.len() as i32;
             passh(argc, argv.as_ptr() as *mut *mut std::os::raw::c_char);
         };
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn login(&self) {
+        panic!("not support yet")
     }
 }

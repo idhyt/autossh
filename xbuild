@@ -1,37 +1,55 @@
 #! /bin/bash
 # set -ex
-cross_info=$(
-    cat <<EOF
+set -e
+
+function set_version() {
+    version=${BUILD_VERSION:-0.1}
+    date=$(git show --pretty=format:"%ci %cr" | head -1 | cut -d " " -f1)
+    commit=$(git rev-parse HEAD | cut -c1-10)
+    sed -i "s|version = \".*\"|version = \"$version ($commit $date)\"|" ./src/main.rs
+}
+
+function build() {
+    cross_info=$(
+        cat <<EOF
 1) x86_64-unknown-linux-musl
 2) aarch64-unknown-linux-musl
 3) x86_64-apple-darwin
 4) aarch64-apple-darwin
+5) x86_64-pc-windows-gnu
 Select the target platform number:
 EOF
-)
+    )
+    name=autossh
+    read -p "$cross_info" number
+    case $number in
+    1)
+        platform=x86_64-unknown-linux-musl
+        ;;
+    2)
+        platform=aarch64-unknown-linux-musl
+        ;;
+    3)
+        platform=x86_64-apple-darwin
+        ;;
+    4)
+        platform=aarch64-apple-darwin
+        ;;
+    5)
+        platform=x86_64-pc-windows-gnu
+        name=autossh.exe
+        ;;
+    *)
+        platform=x86_64-unknown-linux-gnu
+        ;;
+    esac
 
-read -p "$cross_info" number
-case $number in
-1)
-    platform=x86_64-unknown-linux-musl
-    ;;
-2)
-    platform=aarch64-unknown-linux-musl
-    ;;
-3)
-    platform=x86_64-apple-darwin
-    ;;
-4)
-    platform=aarch64-apple-darwin
-    ;;
-*)
-    platform=x86_64-unknown-linux-gnu
-    ;;
-esac
+    rm -rf target/release/build && cross build --release --target $platform
 
-cross build --release --target $platform
+    [ -d "./dist" ] || mkdir -p dist
+    cp target/$platform/release/$name ./dist/autossh.$platform
+    cd ./dist && tar -czvf autossh.$platform.tar.gz autossh.$platform # && rm -rf autossh.$platform
+    echo "Build success, output file: dist/autossh.$platform.tar.gz"
+}
 
-[ -d "./dist" ] || mkdir -p dist
-cp target/$platform/release/autossh ./dist/autossh.$platform
-cd ./dist && tar -czvf autossh.$platform.tar.gz autossh.$platform && rm -rf autossh.$platform
-echo "Build success, output file: dist/autossh.$platform.tar.gz"
+set_version && build
