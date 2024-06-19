@@ -80,11 +80,11 @@ in windows, you need download [putty.exe](https://www.chiark.greenend.org.uk/~sg
 
 the record file is location `$HOME/.autossh.toml`, you can change and backup it.
 
-if you don't know the location, you can use the following command to find it.
+if you don't know the location, you can use the debug mode command to find it.
 
 ```bash
-❯ autossh list --all
-[2024-06-19T10:04:22Z INFO  autossh::ssh::record] the record data located in `/home/idhyt/.autossh.toml`
+❯ RUST_LOG=DEBUG autossh list
+[2024-06-19T10:04:22Z DEBUG  autossh::ssh::record] the record data located in `/home/idhyt/.autossh.toml`
 ```
 
 ## 💥 security 💥
