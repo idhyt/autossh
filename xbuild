@@ -1,12 +1,24 @@
 #! /bin/bash
 # set -ex
-set -e
+set -ex
+
+RELEASE_VERSION=${BUILD_VERSION:-0.1}
 
 function set_version() {
-    version=${BUILD_VERSION:-0.1}
     date=$(git show --pretty=format:"%ci %cr" | head -1 | cut -d " " -f1)
     commit=$(git rev-parse HEAD | cut -c1-10)
-    sed -i "s|version = \".*\"|version = \"$version ($commit $date)\"|" ./src/main.rs
+    RELEASE_VERSION="$RELEASE_VERSION ($commit $date)"
+    sed -i "s|version = \".*\"|version = \"$RELEASE_VERSION\"|" ./src/main.rs
+}
+
+function build_target() {
+    platform=$1
+    name=$2
+    rm -rf target/release/build && cross build --release --target $platform
+    [ -d "./dist" ] || mkdir -p dist
+    cp target/$platform/release/$name ./dist/$platform.$name
+    cd ./dist && tar -czvf autossh.$platform.tar.gz $platform.$name && cd .. # && rm -rf $platform.$name
+    echo "[+] $RELEASE_VERSION build success, output file: dist/autossh.$platform.tar.gz"
 }
 
 function build() {
@@ -44,12 +56,35 @@ EOF
         ;;
     esac
 
-    rm -rf target/release/build && cross build --release --target $platform
-
-    [ -d "./dist" ] || mkdir -p dist
-    cp target/$platform/release/$name ./dist/autossh.$platform
-    cd ./dist && tar -czvf autossh.$platform.tar.gz autossh.$platform # && rm -rf autossh.$platform
-    echo "Build success, output file: dist/autossh.$platform.tar.gz"
+    build_target $platform $name
 }
 
-set_version && build
+function build_all() {
+    [ -d "./dist" ] && rm -rf ./dist
+    targets=(
+        "x86_64-unknown-linux-musl"
+        "aarch64-unknown-linux-musl"
+        "x86_64-apple-darwin"
+        "aarch64-apple-darwin"
+        "x86_64-pc-windows-gnu"
+    )
+    for target in ${targets[@]}; do
+        if [[ $target == "x86_64-pc-windows-gnu" ]]; then
+            name=autossh.exe
+        else
+            name=autossh
+        fi
+        build_target $target $name
+    done
+}
+
+set_version
+
+case $1 in
+"all")
+    build_all
+    ;;
+*)
+    build
+    ;;
+esac
