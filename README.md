@@ -54,6 +54,7 @@ remove multiple records by `rm -i 1 2 3 ...`
 | 1     | ubuntu | idhyt | 1.2.3.4 | 22   |
 +-------+--------+-------+---------+------+
 ```
+
 maybe `scp` something, add option parameter `-a/--all` to show password.
 
 ```bash
@@ -73,13 +74,26 @@ maybe `scp` something, add option parameter `-a/--all` to show password.
 Welcome to Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-156-generic x86_64)
 ```
 
-## security
+in windows, you need download [putty.exe](https://www.chiark.greenend.org.uk/~sgtatham/putty/) and place in the same directory as the tool.
+
+## backup or restore
 
 the record file is location `$HOME/.autossh.toml`, you can change and backup it.
 
-🚨🚨🚨 note! the `password` fields is plaintext 🚨🚨🚨
+if you don't know the location, you can use the following command to find it.
+
+```bash
+❯ autossh list --all
+[2024-06-19T10:04:22Z INFO  autossh::ssh::record] the record data located in `/home/idhyt/.autossh.toml`
+```
+
+## 💥 security 💥
+
+the `password` fields is plaintext by default,
 
 if you wish to encrypt it, import environment variables `ASKEY` before use.
+
+`export ASKEY="SecretKey"` in bash or `set ASKEY="SecretKey"` in cmd.
 
 ```bash
 ❯ export ASKEY="protected"
@@ -102,4 +116,5 @@ There are still some issues that need to be resolved for `passh`
 ❯ ./autossh login -i 1
 !! can't execute: ssh: Bad address (14)
 ```
+
 ensure the ssh info correct and execute several times.
