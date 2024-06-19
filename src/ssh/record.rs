@@ -94,6 +94,7 @@ impl Recorder {
     }
 
     pub fn list_all(&self) {
+        log::info!("the record data located in `{}`", Self::file().display());
         self.pprint(true);
     }
 
