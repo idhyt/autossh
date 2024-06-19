@@ -76,6 +76,29 @@ impl Remote {
 
     #[cfg(target_os = "windows")]
     pub fn login(&self) {
-        panic!("not support yet")
+        let putty_path = {
+            let mut exe_path = std::env::current_exe().unwrap();
+            exe_path.pop();
+            exe_path.push("putty.exe");
+            exe_path
+        };
+        if !putty_path.exists() {
+            log::error!("`putty.exe` not found, you can download it from `https://www.chiark.greenend.org.uk/~sgtatham/putty/` and put it to {}.", putty_path.display());
+            return;
+        }
+        // putty.exe -ssh user@ip -P port -pw password
+        let cmd = format!(
+            "{} -ssh {}@{} -P {} -pw {}",
+            putty_path.display(),
+            self.user,
+            self.ip,
+            self.port,
+            self.password
+        );
+        log::debug!("login at: {}", self);
+        std::process::Command::new("cmd")
+            .args(&["/C", &cmd])
+            .spawn()
+            .unwrap();
     }
 }
