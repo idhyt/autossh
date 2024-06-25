@@ -17,24 +17,33 @@ enum PluginCommands {
         #[arg(short, long)]
         name: String,
         /// the plugin executable file path.
-        #[arg(short, long)]
+        /// example:
+        ///    the absolute path: /path/to/plugin
+        ///    in system environment PATH: plugin
+        #[arg(short, long, verbatim_doc_comment)]
         path: PathBuf,
         /// the plugin command.
-        #[arg(short, long)]
+        /// example:
+        ///    add: {PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a
+        ///    run: /path/to/plugin -p 'password' ssh -p 22 idhyt@1.2.3.4 ps -a
+        #[arg(short, long, verbatim_doc_comment)]
         command: String,
     },
-    /// Remove the remote server by index.
+    /// Remove the plugin by name.
     #[clap(aliases = &["rm", "del", "delete"])]
     Remove {
-        /// the index of the remote server.
-        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
-        index: Vec<u16>,
+        /// the name of the plugin.
+        #[arg(short, long)]
+        name: String,
     },
-    /// Run the plugin command.
+    /// Run the plugin command at remote server.
     Run {
-        /// the index of the plugin.
+        /// the remote server index.
         #[arg(short, long)]
         index: u16,
+        /// the name of the plugin.
+        #[arg(short, long)]
+        name: String,
     },
 }
 
@@ -100,7 +109,7 @@ enum Commands {
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.1.2 (da740039b7 2024-06-19)",
+    version = "0.2.0 (dirty)",
     about = "ssh manager and auto login tool",
     long_about = None
 )]
@@ -151,11 +160,11 @@ fn main() {
             } => {
                 cmd::add(name, path, command);
             }
-            PluginCommands::Remove { index } => {
-                cmd::remove(index);
+            PluginCommands::Remove { name } => {
+                cmd::remove(name);
             }
-            PluginCommands::Run { index } => {
-                log::info!("run plugin: {}", index);
+            PluginCommands::Run { index, name } => {
+                cmd::run(index, name);
             }
         },
     }
