@@ -1,16 +1,38 @@
 use clap::{Parser, Subcommand};
 use env_logger;
+use std::path::PathBuf;
 
-use ssh::{add, list, login, remove, run_copy};
-
+mod cmd;
+mod config;
 mod ssh;
 
 #[derive(Subcommand, Debug)]
-enum Runs {
-    /// Copy command.
-    #[clap(aliases = &["cp", "scp"])]
-    Copy {
+enum PluginCommands {
+    /// List the plugin.
+    #[clap(aliases = &["ls", "l"])]
+    List {},
+    /// Add the plugin.
+    Add {
+        /// the alias name for the plugin.
+        #[arg(short, long)]
+        name: String,
+        /// the plugin executable file path.
+        #[arg(short, long)]
+        path: PathBuf,
+        /// the plugin command.
+        #[arg(short, long)]
+        command: String,
+    },
+    /// Remove the remote server by index.
+    #[clap(aliases = &["rm", "del", "delete"])]
+    Remove {
         /// the index of the remote server.
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+        index: Vec<u16>,
+    },
+    /// Run the plugin command.
+    Run {
+        /// the index of the plugin.
         #[arg(short, long)]
         index: u16,
     },
@@ -59,18 +81,26 @@ enum Commands {
         #[arg(short, long)]
         index: u16,
     },
-    /// TODO impl some command.
-    #[clap(alias = "cmd")]
+    /// Copy the file between remote server and local host.
+    #[clap(aliases = &["cp", "scp", "move", "mv"])]
+    Copy {
+        /// the index of the remote server.
+        #[arg(short, long)]
+        index: u16,
+    },
+
+    /// Plugin to execute something.
+    #[clap(aliases = &["cmd", "plugin"])]
     Command {
         #[command(subcommand)]
-        command: Runs,
+        commands: PluginCommands,
     },
 }
 
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.1",
+    version = "0.1.2 (da740039b7 2024-06-19)",
     about = "ssh manager and auto login tool",
     long_about = None
 )]
@@ -86,7 +116,7 @@ fn main() {
 
     match &args.command {
         Some(Commands::List { all }) => {
-            list(all);
+            ssh::list(all);
         }
         Some(Commands::Add {
             user,
@@ -96,20 +126,36 @@ fn main() {
             name,
             note,
         }) => {
-            add(user, password, ip, port, name, note);
+            ssh::add(user, password, ip, port, name, note);
         }
         Some(Commands::Remove { index }) => {
-            remove(index);
+            ssh::remove(index);
         }
         Some(Commands::Login { index }) => {
-            login(index);
+            ssh::login(index);
+        }
+        Some(Commands::Copy { index }) => {
+            ssh::copy(index);
         }
         None => {
-            list(&false);
+            ssh::list(&false);
         }
-        Some(Commands::Command { command }) => match command {
-            Runs::Copy { index } => {
-                run_copy(index);
+        Some(Commands::Command { commands }) => match commands {
+            PluginCommands::List {} => {
+                cmd::list();
+            }
+            PluginCommands::Add {
+                name,
+                path,
+                command,
+            } => {
+                cmd::add(name, path, command);
+            }
+            PluginCommands::Remove { index } => {
+                cmd::remove(index);
+            }
+            PluginCommands::Run { index } => {
+                log::info!("run plugin: {}", index);
             }
         },
     }
