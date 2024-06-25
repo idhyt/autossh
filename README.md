@@ -108,6 +108,31 @@ if you wish to encrypt it, import environment variables `ASKEY` before use.
 password = "IiaMr0ce4iKF5AvXf+rtFQ9mET0Ug4hLOoGeybzyOQx/lUvh"
 ```
 
+## plugins(experimental)
+
+add plugin:
+
+```bash
+❯ autossh plugin add -n "ps" -p "passh" -c "{PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a"
++--------+---------------+-----------------------------------------------------------------+
+|  name  |     path      |                             command                             |
++========+===============+=================================================================+
+| ps     |     passh     | {PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a        |
++--------+---------------+-----------------------------------------------------------------+
+```
+
+run plugin:
+
+```bash
+❯ autossh plugin run -n "ps" -i 1
+[2024-06-25T08:37:29Z INFO  autossh::cmd::plugin] run command output:
+(idhyt@1.2.3.4) Password:
+        PID TTY          TIME CMD
+       3588 pts/1    00:00:00 zsh
+       3590 pts/1    00:00:05 zsh
+       ...
+```
+
 🍻 Thanks [passh](https://github.com/clarkwang/passh)
 
 There are still some issues that need to be resolved for `passh`
