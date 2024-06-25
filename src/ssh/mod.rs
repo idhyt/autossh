@@ -1,40 +1,48 @@
 mod bind;
-mod record;
 mod secure;
-mod server;
+pub mod server;
 
-use record::Recorder;
+use crate::config::Recorder;
 
-pub fn add(user: &str, password: &str, ip: &str, port: &u16, name: &Option<String>, note: &Option<String>) {
+pub fn add(
+    user: &str,
+    password: &str,
+    ip: &str,
+    port: &u16,
+    name: &Option<String>,
+    note: &Option<String>,
+) {
     let mut recorder = Recorder::load();
-    let index = recorder.add(user, password, ip, port, name, note);
+    let index = recorder.remotes.add(user, password, ip, port, name, note);
     log::debug!("add remote success, index {}", index);
-    recorder.list();
+    recorder.save();
+    recorder.remotes.list();
 }
 
 pub fn list(all: &bool) {
     let recorder = Recorder::load();
     if *all {
-        recorder.list_all();
+        recorder.remotes.list_all();
     } else {
-        recorder.list();
+        recorder.remotes.list();
     }
 }
 
 pub fn remove(index: &Vec<u16>) {
     let mut recorder = Recorder::load();
-    let left = recorder.delete(index);
+    let left = recorder.remotes.delete(index);
     log::debug!("remove remote success, {} index left", left);
-    recorder.list();
+    recorder.save();
+    recorder.remotes.list();
 }
 
 pub fn login(index: &u16) {
-    Recorder::load().get(index).unwrap().login();
+    Recorder::load().remotes.get(index).unwrap().login();
 }
 
-pub fn run_copy(index: &u16) {
+pub fn copy(index: &u16) {
     let recorder = Recorder::load();
-    let remote = recorder.get(index).unwrap();
+    let remote = recorder.remotes.get(index).unwrap();
     log::info!(
         r#"copy command example:
     > scp -P {p} /path/to/local {u}@{i}:/path/to/remote
