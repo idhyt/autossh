@@ -108,9 +108,13 @@ if you wish to encrypt it, import environment variables `ASKEY` before use.
 password = "IiaMr0ce4iKF5AvXf+rtFQ9mET0Ug4hLOoGeybzyOQx/lUvh"
 ```
 
-## plugins(experimental)
+## plugins / command
 
-add plugin:
+This is an experimental feature and may be refactored frequently.
+
+the variables in the symbol `{}` will be [formatted](src/cmd/plugin.rs#L102) as server information. do not change the variable name.
+
+here a auto login ssh with password and run ps command by `passh` in linux:
 
 ```bash
 ❯ autossh plugin add -n "ps" -p "passh" -c "{PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a"
@@ -119,11 +123,7 @@ add plugin:
 +========+===============+=================================================================+
 | ps     |     passh     | {PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a        |
 +--------+---------------+-----------------------------------------------------------------+
-```
 
-run plugin:
-
-```bash
 ❯ autossh plugin run -n "ps" -i 1
 [2024-06-25T08:37:29Z INFO  autossh::cmd::plugin] run command output:
 (idhyt@1.2.3.4) Password:
@@ -131,6 +131,20 @@ run plugin:
        3588 pts/1    00:00:00 zsh
        3590 pts/1    00:00:05 zsh
        ...
+```
+
+example in windows, use `putty` to auto login ssh with password:
+
+```bash
+D:\Downloads\autossh>autossh.exe plugin add -n "login" -p "D:\Downloads\autossh\putty.exe" -c "{PLUGIN} -ssh {USER}@{IP} -P {PORT} -pw {PASSWORD}"
++-------+--------------------------------+----------------------------------------------------+
+| name  |              path              |                      command                       |
++=======+================================+====================================================+
+| login | D:\Downloads\autossh\putty.exe | {PLUGIN} -ssh {USER}@{IP} -P {PORT} -pw {PASSWORD} |
++-------+--------------------------------+----------------------------------------------------+
+
+D:\Downloads\autossh>autossh.exe plugin run -i 1 -n "login"
+... you will see the login window ...
 ```
 
 🍻 Thanks [passh](https://github.com/clarkwang/passh)
