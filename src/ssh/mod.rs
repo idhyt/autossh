@@ -1,4 +1,3 @@
-mod bind;
 mod secure;
 pub mod server;
 
