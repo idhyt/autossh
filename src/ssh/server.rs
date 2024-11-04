@@ -42,13 +42,20 @@ where
 // impl display for Remote
 impl std::fmt::Display for Remote {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ssh {}@{} -p {}", self.user, self.ip, self.port,)
+        write!(f, "{}@{}:{}", self.user, self.ip, self.port,)
     }
 }
 
 impl Remote {
     pub fn login(&self) {
         log::debug!("login at: {}", self);
+
+        std::process::Command::new("ssh")
+            .arg("-p")
+            .arg(self.port.to_string())
+            .arg(format!("{}@{}", self.user, self.ip))
+            .status()
+            .expect("failed to login");
     }
 }
 
@@ -63,6 +70,7 @@ impl Remotes {
         let mut titles = vec!["index", "name", "user", "ip", "port"];
         if all {
             titles.push("password");
+            titles.push("authorized");
             titles.push("note");
         }
         table.set_titles(Row::new(
@@ -82,6 +90,7 @@ impl Remotes {
             ];
             if all {
                 row.push(remote.password.clone());
+                row.push(remote.authorized.to_string());
                 row.push(remote.note.clone().unwrap_or_else(|| "".to_string()));
             }
             table.add_row(Row::new(
@@ -126,7 +135,7 @@ impl Remotes {
 
         let indexs = self.list.iter().map(|v| v.index).collect::<Vec<u16>>();
         let index = indexs.iter().max().unwrap_or(&0) + 1;
-        let remote = Remote {
+        let mut remote = Remote {
             index,
             user: user.to_string(),
             password: password.to_string(),
@@ -136,14 +145,20 @@ impl Remotes {
             name: name.clone(),
             note: note.clone(),
         };
+        remote.authorized();
+
         log::debug!("add remote: {}", remote);
         self.list.push(remote);
         index
     }
 
     pub fn delete(&mut self, index: &Vec<u16>) -> u16 {
-        // let index = *index;
-        // self.remotes.retain(|v| v.index != index);
+        for remote in self.list.iter() {
+            if index.contains(&remote.index) {
+                remote.revoke();
+            }
+        }
+
         self.list.retain(|v| !index.contains(&v.index));
         // index
         self.list.len() as u16
