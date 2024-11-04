@@ -1,7 +1,7 @@
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::secure::{decrypt, encrypt};
+use super::secure::{decrypt, encrypt, panic_if_not_secure};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -12,6 +12,8 @@ pub struct Remote {
     /// the login password.
     #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
+    /// have the authorized to login.
+    pub authorized: bool,
     /// the login id address.
     pub ip: String,
     /// the login port.
@@ -126,6 +128,7 @@ impl Remotes {
             index,
             user: user.to_string(),
             password: password.to_string(),
+            authorized: false,
             ip: ip.to_string(),
             port: *port,
             name: name.clone(),
