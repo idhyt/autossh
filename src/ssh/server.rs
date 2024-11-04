@@ -122,6 +122,8 @@ impl Remotes {
         name: &Option<String>,
         note: &Option<String>,
     ) -> u16 {
+        panic_if_not_secure();
+
         let indexs = self.list.iter().map(|v| v.index).collect::<Vec<u16>>();
         let index = indexs.iter().max().unwrap_or(&0) + 1;
         let remote = Remote {
