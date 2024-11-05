@@ -6,6 +6,14 @@ use home;
 
 lazy_static::lazy_static! {
     static ref CONFIG: PathBuf = home::home_dir().unwrap().join(".autossh.toml");
+    pub static ref SSHKEY: SshKey = {
+        let record = Recorder::load();
+        if let Some(sshkey) = record.sshkey {
+            sshkey
+        } else {
+            SshKey::default()
+        }
+    };
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -16,12 +24,21 @@ pub struct SshKey {
     pub public: PathBuf,
 }
 
+impl SshKey {
+    fn default() -> Self {
+        SshKey {
+            private: home::home_dir().unwrap().join(".ssh").join("id_rsa"),
+            public: home::home_dir().unwrap().join(".ssh").join("id_rsa.pub"),
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Recorder {
     /// the remote server list.
     pub remotes: Remotes,
     /// the ssh key location.
-    pub key: Option<SshKey>,
+    pub sshkey: Option<SshKey>,
 }
 
 impl Recorder {

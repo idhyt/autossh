@@ -2,14 +2,14 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
 
-use home;
 use ssh2::Session;
 
 use super::server::Remote;
+use crate::config::SSHKEY;
 
 impl Remote {
     fn read_pub_key(&self) -> String {
-        let pub_key = home::home_dir().unwrap().join(".ssh/id_rsa.pub");
+        let pub_key = &SSHKEY.public;
         assert!(
             pub_key.is_file(),
             "public key not found at: {}, you can generate it by `ssh-keygen`",

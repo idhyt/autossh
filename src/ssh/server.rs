@@ -2,6 +2,7 @@ use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::secure::{decrypt, encrypt, panic_if_not_secure};
+use crate::config::SSHKEY;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -48,11 +49,13 @@ impl std::fmt::Display for Remote {
 
 impl Remote {
     pub fn login(&self) {
-        log::debug!("login at: {}", self);
+        log::debug!("login {} with {}", self, SSHKEY.private.display());
         std::process::Command::new("ssh")
+            .arg(format!("{}@{}", self.user, self.ip))
             .arg("-p")
             .arg(self.port.to_string())
-            .arg(format!("{}@{}", self.user, self.ip))
+            .arg("-i")
+            .arg(SSHKEY.private.to_str().unwrap())
             .status()
             .expect("failed to login");
     }
