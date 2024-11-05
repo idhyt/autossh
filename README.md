@@ -1,7 +1,7 @@
 ## update 0.3
 
 - Use standard ssh passwordless login
-- Force encrypted
+- Force encrypted (set `ASKEY` environment variable)
 - Keep consistency in win and unix
 
 Option use passwordless login.
@@ -110,7 +110,11 @@ the `password` fields is plaintext by default,
 
 if you wish to encrypt it, import environment variables `ASKEY` before use.
 
-`export ASKEY="SecretKey"` in bash or `set ASKEY="SecretKey"` in cmd.
+`export ASKEY="SecretKey"` in bash, 
+
+`set ASKEY="SecretKey"` in cmd and 
+
+`$env:ASKEY="SecretKey"` in powershell.
 
 ```bash
 ❯ export ASKEY="protected"
