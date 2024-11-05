@@ -49,7 +49,6 @@ impl std::fmt::Display for Remote {
 impl Remote {
     pub fn login(&self) {
         log::debug!("login at: {}", self);
-
         std::process::Command::new("ssh")
             .arg("-p")
             .arg(self.port.to_string())
@@ -114,6 +113,17 @@ impl Remotes {
         None
     }
 
+    pub fn get_mut(&mut self, index: &u16) -> Option<&mut Remote> {
+        let index = *index;
+        for remote in self.list.iter_mut() {
+            if remote.index == index {
+                return Some(remote);
+            }
+        }
+        log::error!("the index {} not found", index);
+        None
+    }
+
     pub fn list(&self) {
         self.pprint(false);
     }
@@ -145,7 +155,7 @@ impl Remotes {
             name: name.clone(),
             note: note.clone(),
         };
-        remote.authorized = remote.authorized(false);
+        remote.authorized();
 
         log::debug!("add remote: {}", remote);
         self.list.push(remote);
@@ -153,7 +163,7 @@ impl Remotes {
     }
 
     pub fn delete(&mut self, index: &Vec<u16>) -> u16 {
-        for remote in self.list.iter() {
+        for remote in self.list.iter_mut() {
             if index.contains(&remote.index) {
                 remote.revoke();
             }

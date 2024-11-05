@@ -2,8 +2,6 @@ mod secure;
 pub mod server;
 mod session;
 
-use std::vec;
-
 use crate::config::Recorder;
 
 pub fn add(
@@ -38,19 +36,12 @@ pub fn remove(index: &Vec<u16>) {
     recorder.remotes.list();
 }
 
-pub fn authorize(index: &Vec<u16>) {
-    let mut recorder = Recorder::load();
-    for remote in recorder.remotes.list.iter_mut() {
-        if index.contains(&remote.index) {
-            remote.authorized(true);
-        }
-    }
-    recorder.save();
-}
-
 pub fn login(index: &u16, auth: &bool) {
     if *auth {
-        authorize(&vec![*index]);
+        let mut recorder = Recorder::load();
+        let remote = recorder.remotes.get_mut(index).unwrap();
+        remote.authorized();
+        recorder.save();
     }
     Recorder::load().remotes.get(index).unwrap().login();
 }
@@ -70,3 +61,23 @@ pub fn copy(index: &u16) {
         pass = &remote.password
     );
 }
+
+// pub fn authorize(index: &Vec<u16>) {
+//     let mut recorder = Recorder::load();
+//     for remote in recorder.remotes.list.iter_mut() {
+//         if index.contains(&remote.index) {
+//             remote.authorized();
+//         }
+//     }
+//     recorder.save();
+// }
+
+// pub fn revoke(index: &Vec<u16>) {
+//     let mut recorder = Recorder::load();
+//     for remote in recorder.remotes.list.iter_mut() {
+//         if index.contains(&remote.index) {
+//             remote.revoke();
+//         }
+//     }
+//     recorder.save();
+// }

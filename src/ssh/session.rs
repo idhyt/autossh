@@ -67,11 +67,10 @@ impl Remote {
         log::debug!("write file success: {}", file);
     }
 
-    pub fn authorized(&self, force: bool) -> bool {
-        if self.authorized && !force {
-            log::debug!("have authorized at {}", self);
-            return true;
-        }
+    pub fn authorized(&mut self) {
+        // if self.authorized {
+        //     log::debug!("have authorized at {}", self);
+        // }
 
         // check public key exist in $HOME/.ssh/id_rsa.pub
         let pub_key = self.read_pub_key();
@@ -108,14 +107,14 @@ impl Remote {
         }
 
         log::debug!("remote authorized success for {}", self);
-        true
+        self.authorized = true;
     }
 
-    pub fn revoke(&self) {
-        if !self.authorized {
-            log::debug!("remote not authorized, skip revoke");
-            return;
-        }
+    pub fn revoke(&mut self) {
+        // if !self.authorized {
+        //     log::debug!("remote not authorized, skip revoke");
+        //     return;
+        // }
 
         let pub_key = self.read_pub_key();
         let session = self.get_session();
@@ -136,6 +135,7 @@ impl Remote {
                 log::debug!("authorized_keys not found in {}, skip revoke", remote_keys);
             }
         }
+        self.authorized = false;
     }
 }
 
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn test_authorized() {
         // ssh idhyt@192.168.0.1 -p 22
-        let remote = Remote {
+        let mut remote = Remote {
             index: 1,
             user: "idhyt".to_string(),
             password: "password".to_string(),
@@ -157,6 +157,7 @@ mod tests {
             note: Some("test".to_string()),
             authorized: false,
         };
-        assert!(remote.authorized(true));
+        remote.authorized();
+        assert!(remote.authorized);
     }
 }

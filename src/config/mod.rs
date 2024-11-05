@@ -31,8 +31,12 @@ impl Recorder {
     }
 
     pub fn load() -> Self {
-        let content = std::fs::read_to_string(&*CONFIG).unwrap();
-        let recorder: Recorder = toml::from_str(&content).unwrap();
+        let recorder = if CONFIG.is_file() {
+            let content = std::fs::read_to_string(&*CONFIG).unwrap();
+            toml::from_str(&content).unwrap()
+        } else {
+            Recorder::default()
+        };
         recorder
     }
 }
