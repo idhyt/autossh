@@ -16,6 +16,6 @@ lazy_static = "1.4.0"
 log = "0.4.21"
 prettytable = "0.10.0"
 serde = { version = "1.0.201", features = ["derive"] }
-ssh2 = "0.9.4"
+ssh2 = { version = "0.9.4", features = ["vendored-openssl"] }
 strfmt = "0.2.4"
 toml = "0.8.12"
