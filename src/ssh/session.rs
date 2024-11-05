@@ -67,14 +67,14 @@ impl Remote {
         log::debug!("write file success: {}", file);
     }
 
-    pub fn authorized(&mut self) {
-        if self.authorized {
-            return;
+    pub fn authorized(&self, force: bool) -> bool {
+        if self.authorized && !force {
+            log::debug!("have authorized at {}", self);
+            return true;
         }
 
         // check public key exist in $HOME/.ssh/id_rsa.pub
         let pub_key = self.read_pub_key();
-
         // Connect to the local SSH server
         let sess = self.get_session();
 
@@ -89,7 +89,6 @@ impl Remote {
                 if data.contains(&pub_key) {
                     log::debug!("public key found in authorized_keys");
                     // println!("public key found in authorized_keys");
-                    self.authorized = true;
                 } else {
                     log::debug!("add the public key to authorized_keys");
                     // println!("public key not found in authorized_keys");
@@ -97,7 +96,6 @@ impl Remote {
                     data.push_str("\n");
                     data.push_str(&pub_key);
                     self.write_file(&sess, &remote_keys, &data, 0o600);
-                    self.authorized = true;
                 }
             }
             None => {
@@ -106,15 +104,11 @@ impl Remote {
                     remote_keys
                 );
                 self.write_file(&sess, &remote_keys, &pub_key, 0o600);
-                self.authorized = true;
             }
         }
 
-        if !self.authorized {
-            panic!("remote authorized failed for {}", self);
-        }
-
         log::debug!("remote authorized success for {}", self);
+        true
     }
 
     pub fn revoke(&self) {
@@ -153,7 +147,7 @@ mod tests {
     #[test]
     fn test_authorized() {
         // ssh idhyt@192.168.0.1 -p 22
-        let mut remote = Remote {
+        let remote = Remote {
             index: 1,
             user: "idhyt".to_string(),
             password: "password".to_string(),
@@ -163,6 +157,6 @@ mod tests {
             note: Some("test".to_string()),
             authorized: false,
         };
-        remote.authorized();
+        assert!(remote.authorized(true));
     }
 }

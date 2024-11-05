@@ -10,7 +10,6 @@ anyhow = "1.0.83"
 base64 = "0.22.1"
 chacha20poly1305 = "0.10.1"
 clap = { version = "4.5.4", features = ["derive"] }
-directories = "5.0.1"
 env_logger = "0.11.3"
 home = "0.5.9"
 lazy_static = "1.4.0"
@@ -20,6 +19,3 @@ serde = { version = "1.0.201", features = ["derive"] }
 ssh2 = "0.9.4"
 strfmt = "0.2.4"
 toml = "0.8.12"
-
-[build-dependencies]
-cc = "1.0.97"

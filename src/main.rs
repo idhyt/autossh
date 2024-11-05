@@ -2,7 +2,6 @@ use clap::{Parser, Subcommand};
 use env_logger;
 use std::path::PathBuf;
 
-mod cmd;
 mod config;
 mod ssh;
 
@@ -89,6 +88,9 @@ enum Commands {
         /// the index of the remote server.
         #[arg(short, long)]
         index: u16,
+        /// force authorize the remote server before login.
+        #[arg(long, default_value = "false")]
+        auth: bool,
     },
     /// Copy the file between remote server and local host.
     #[clap(aliases = &["cp", "scp", "move", "mv"])]
@@ -96,13 +98,6 @@ enum Commands {
         /// the index of the remote server.
         #[arg(short, long)]
         index: u16,
-    },
-
-    /// Plugin to execute something.
-    #[clap(aliases = &["cmd", "plugin"])]
-    Command {
-        #[command(subcommand)]
-        commands: PluginCommands,
     },
 }
 
@@ -140,8 +135,9 @@ fn main() {
         Some(Commands::Remove { index }) => {
             ssh::remove(index);
         }
-        Some(Commands::Login { index }) => {
-            ssh::login(index);
+        Some(Commands::Login { index, auth }) => {
+            println!("login: {}, auth: {}", index, auth);
+            ssh::login(index, auth);
         }
         Some(Commands::Copy { index }) => {
             ssh::copy(index);
@@ -149,24 +145,6 @@ fn main() {
         None => {
             ssh::list(&false);
         }
-        Some(Commands::Command { commands }) => match commands {
-            PluginCommands::List {} => {
-                cmd::list();
-            }
-            PluginCommands::Add {
-                name,
-                path,
-                command,
-            } => {
-                cmd::add(name, path, command);
-            }
-            PluginCommands::Remove { name } => {
-                cmd::remove(name);
-            }
-            PluginCommands::Run { index, name } => {
-                cmd::run(index, name);
-            }
-        },
     }
 
     std::process::exit(0);

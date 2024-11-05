@@ -145,7 +145,7 @@ impl Remotes {
             name: name.clone(),
             note: note.clone(),
         };
-        remote.authorized();
+        remote.authorized = remote.authorized(false);
 
         log::debug!("add remote: {}", remote);
         self.list.push(remote);

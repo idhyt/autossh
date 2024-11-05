@@ -42,14 +42,16 @@ pub fn authorize(index: &Vec<u16>) {
     let mut recorder = Recorder::load();
     for remote in recorder.remotes.list.iter_mut() {
         if index.contains(&remote.index) {
-            remote.authorized();
+            remote.authorized(true);
         }
     }
     recorder.save();
 }
 
-pub fn login(index: &u16) {
-    authorize(&vec![*index]);
+pub fn login(index: &u16, auth: &bool) {
+    if *auth {
+        authorize(&vec![*index]);
+    }
     Recorder::load().remotes.get(index).unwrap().login();
 }
 
