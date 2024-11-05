@@ -4,6 +4,24 @@
 - Force encrypted
 - Keep consistency in win and unix
 
+Option use passwordless login.
+
+step1. generate ssh key with empty password
+
+```bash
+ssh-keygen -t rsa -b 2048 -C "autossh" -N "" -f /path/to/.ssh/autossh_key
+```
+
+step2. write config to `$HOME/.autossh.toml`
+
+```toml
+[[remotes.list]]
+...
+[sshkey]
+private = "/home/idhyt/.ssh/autossh_key"
+public = "/home/idhyt/.ssh/autossh_key.pub"
+```
+
 ## usage
 
 ```bash
