@@ -1,9 +1,8 @@
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[cfg(target_family = "unix")]
-use super::bind::passh;
-use super::secure::{decrypt, encrypt};
+use super::secure::{decrypt, encrypt, panic_if_not_secure};
+use crate::config::SSHKEY;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -14,6 +13,8 @@ pub struct Remote {
     /// the login password.
     #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
+    /// have the authorized to login.
+    pub authorized: bool,
     /// the login id address.
     pub ip: String,
     /// the login port.
@@ -42,65 +43,21 @@ where
 // impl display for Remote
 impl std::fmt::Display for Remote {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ssh {}@{} -p {}", self.user, self.ip, self.port,)
+        write!(f, "{}@{}:{}", self.user, self.ip, self.port,)
     }
 }
 
 impl Remote {
-    #[cfg(target_family = "unix")]
     pub fn login(&self) {
-        log::debug!("login at: {}", self);
-
-        unsafe {
-            // passh -c 10 -p password ssh -p port user@ip
-            let argv = vec![
-                std::ffi::CString::new("passh").unwrap().into_raw(),
-                std::ffi::CString::new("-c").unwrap().into_raw(),
-                std::ffi::CString::new("10").unwrap().into_raw(),
-                std::ffi::CString::new("-p").unwrap().into_raw(),
-                std::ffi::CString::new(self.password.clone())
-                    .unwrap()
-                    .into_raw(),
-                std::ffi::CString::new("ssh").unwrap().into_raw(),
-                std::ffi::CString::new("-p").unwrap().into_raw(),
-                std::ffi::CString::new(self.port.to_string())
-                    .unwrap()
-                    .into_raw(),
-                std::ffi::CString::new(format!("{}@{}", self.user, self.ip))
-                    .unwrap()
-                    .into_raw(),
-            ];
-            let argc = argv.len() as i32;
-            passh(argc, argv.as_ptr() as *mut *mut std::os::raw::c_char);
-        };
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn login(&self) {
-        let putty_path = {
-            let mut exe_path = std::env::current_exe().unwrap();
-            exe_path.pop();
-            exe_path.push("putty.exe");
-            exe_path
-        };
-        if !putty_path.exists() {
-            log::error!("`putty.exe` not found, you can download it from `https://www.chiark.greenend.org.uk/~sgtatham/putty/` and put it to {}.", putty_path.display());
-            return;
-        }
-        // putty.exe -ssh user@ip -P port -pw password
-        let cmd = format!(
-            "{} -ssh {}@{} -P {} -pw {}",
-            putty_path.display(),
-            self.user,
-            self.ip,
-            self.port,
-            self.password
-        );
-        log::debug!("login at: {}", self);
-        std::process::Command::new("cmd")
-            .args(&["/C", &cmd])
-            .spawn()
-            .unwrap();
+        log::debug!("login {} with {}", self, SSHKEY.private.display());
+        std::process::Command::new("ssh")
+            .arg(format!("{}@{}", self.user, self.ip))
+            .arg("-p")
+            .arg(self.port.to_string())
+            .arg("-i")
+            .arg(SSHKEY.private.to_str().unwrap())
+            .status()
+            .expect("failed to login");
     }
 }
 
@@ -115,6 +72,7 @@ impl Remotes {
         let mut titles = vec!["index", "name", "user", "ip", "port"];
         if all {
             titles.push("password");
+            titles.push("authorized");
             titles.push("note");
         }
         table.set_titles(Row::new(
@@ -134,6 +92,7 @@ impl Remotes {
             ];
             if all {
                 row.push(remote.password.clone());
+                row.push(remote.authorized.to_string());
                 row.push(remote.note.clone().unwrap_or_else(|| "".to_string()));
             }
             table.add_row(Row::new(
@@ -149,6 +108,17 @@ impl Remotes {
     pub fn get(&self, index: &u16) -> Option<&Remote> {
         let index = *index;
         for remote in self.list.iter() {
+            if remote.index == index {
+                return Some(remote);
+            }
+        }
+        log::error!("the index {} not found", index);
+        None
+    }
+
+    pub fn get_mut(&mut self, index: &u16) -> Option<&mut Remote> {
+        let index = *index;
+        for remote in self.list.iter_mut() {
             if remote.index == index {
                 return Some(remote);
             }
@@ -174,25 +144,34 @@ impl Remotes {
         name: &Option<String>,
         note: &Option<String>,
     ) -> u16 {
+        panic_if_not_secure();
+
         let indexs = self.list.iter().map(|v| v.index).collect::<Vec<u16>>();
         let index = indexs.iter().max().unwrap_or(&0) + 1;
-        let remote = Remote {
+        let mut remote = Remote {
             index,
             user: user.to_string(),
             password: password.to_string(),
+            authorized: false,
             ip: ip.to_string(),
             port: *port,
             name: name.clone(),
             note: note.clone(),
         };
+        remote.authorized();
+
         log::debug!("add remote: {}", remote);
         self.list.push(remote);
         index
     }
 
     pub fn delete(&mut self, index: &Vec<u16>) -> u16 {
-        // let index = *index;
-        // self.remotes.retain(|v| v.index != index);
+        for remote in self.list.iter_mut() {
+            if index.contains(&remote.index) {
+                remote.revoke();
+            }
+        }
+
         self.list.retain(|v| !index.contains(&v.index));
         // index
         self.list.len() as u16

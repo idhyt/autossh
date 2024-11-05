@@ -11,7 +11,7 @@ lazy_static::lazy_static! {
             Some(key)
         },
         Err(_) => {
-            log::warn!("💥 export `ASKEY` to protect password! 💥");
+            // log::warn!("💥 export `ASKEY` to protect password! 💥");
             None
         },
     };
@@ -77,6 +77,12 @@ pub fn decrypt(data: &str) -> String {
         .expect("decode failed by base64");
     let key = generate_key(KEY.as_deref());
     chacha_decrypt(&obsf, &key)
+}
+
+pub fn panic_if_not_secure() {
+    if KEY.is_none() {
+        panic!("💥 export `ASKEY` to protect password! 💥");
+    }
 }
 
 // tests

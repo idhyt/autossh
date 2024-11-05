@@ -1,44 +1,59 @@
-use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::cmd::plugin::Plugins;
 use crate::ssh::server::Remotes;
+use home;
+
+lazy_static::lazy_static! {
+    static ref CONFIG: PathBuf = home::home_dir().unwrap().join(".autossh.toml");
+    pub static ref SSHKEY: SshKey = {
+        let record = Recorder::load();
+        if let Some(sshkey) = record.sshkey {
+            sshkey
+        } else {
+            SshKey::default()
+        }
+    };
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct SshKey {
+    /// the private key location.
+    pub private: PathBuf,
+    /// the public key location.
+    pub public: PathBuf,
+}
+
+impl SshKey {
+    fn default() -> Self {
+        SshKey {
+            private: home::home_dir().unwrap().join(".ssh").join("id_rsa"),
+            public: home::home_dir().unwrap().join(".ssh").join("id_rsa.pub"),
+        }
+    }
+}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Recorder {
     /// the remote server list.
     pub remotes: Remotes,
-    /// the plugin list.
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    pub commands: Plugins,
+    /// the ssh key location.
+    pub sshkey: Option<SshKey>,
 }
 
 impl Recorder {
-    fn file() -> PathBuf {
-        let file = UserDirs::new().unwrap().home_dir().join(".autossh.toml");
-        if !file.is_file() {
-            // log::debug!("record file not found in {}", file.display());
-            // create the file if not found.
-            let content = toml::to_string(&Self::default()).unwrap();
-            std::fs::write(&file, content).unwrap();
-            log::debug!("init the record file in `{}`", file.display());
-        } else {
-            log::debug!("the record data located in `{}`", file.display());
-        }
-        file
-    }
-
     pub fn save(&self) {
-        let file = Self::file();
         let content = toml::to_string(&self).unwrap();
-        std::fs::write(&file, content).unwrap();
+        std::fs::write(&*CONFIG, content).unwrap();
     }
 
     pub fn load() -> Self {
-        let file = Self::file();
-        let content = std::fs::read_to_string(&file).expect("read record file failed");
-        let recorder: Recorder = toml::from_str(&content).expect("parse record file failed");
+        let recorder = if CONFIG.is_file() {
+            let content = std::fs::read_to_string(&*CONFIG).unwrap();
+            toml::from_str(&content).unwrap()
+        } else {
+            Recorder::default()
+        };
         recorder
     }
 }

@@ -1,51 +1,9 @@
 use clap::{Parser, Subcommand};
 use env_logger;
-use std::path::PathBuf;
 
-mod cmd;
 mod config;
 mod ssh;
 
-#[derive(Subcommand, Debug)]
-enum PluginCommands {
-    /// List the plugin.
-    #[clap(aliases = &["ls", "l"])]
-    List {},
-    /// Add the plugin.
-    Add {
-        /// the alias name for the plugin.
-        #[arg(short, long)]
-        name: String,
-        /// the plugin executable file path.
-        /// example:
-        ///    the absolute path: /path/to/plugin
-        ///    in system environment PATH: plugin
-        #[arg(short, long, verbatim_doc_comment)]
-        path: PathBuf,
-        /// the plugin command.
-        /// example:
-        ///    add: {PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a
-        ///    run: /path/to/plugin -p 'password' ssh -p 22 idhyt@1.2.3.4 ps -a
-        #[arg(short, long, verbatim_doc_comment)]
-        command: String,
-    },
-    /// Remove the plugin by name.
-    #[clap(aliases = &["rm", "del", "delete"])]
-    Remove {
-        /// the name of the plugin.
-        #[arg(short, long)]
-        name: String,
-    },
-    /// Run the plugin command at remote server.
-    Run {
-        /// the remote server index.
-        #[arg(short, long)]
-        index: u16,
-        /// the name of the plugin.
-        #[arg(short, long)]
-        name: String,
-    },
-}
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -89,6 +47,9 @@ enum Commands {
         /// the index of the remote server.
         #[arg(short, long)]
         index: u16,
+        /// force authorize the remote server before login.
+        #[arg(long, default_value = "false")]
+        auth: bool,
     },
     /// Copy the file between remote server and local host.
     #[clap(aliases = &["cp", "scp", "move", "mv"])]
@@ -97,19 +58,12 @@ enum Commands {
         #[arg(short, long)]
         index: u16,
     },
-
-    /// Plugin to execute something.
-    #[clap(aliases = &["cmd", "plugin"])]
-    Command {
-        #[command(subcommand)]
-        commands: PluginCommands,
-    },
 }
 
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.2.0 (dirty)",
+    version = "0.3.0 (dirty)",
     about = "ssh manager and auto login tool",
     long_about = None
 )]
@@ -140,8 +94,8 @@ fn main() {
         Some(Commands::Remove { index }) => {
             ssh::remove(index);
         }
-        Some(Commands::Login { index }) => {
-            ssh::login(index);
+        Some(Commands::Login { index, auth }) => {
+            ssh::login(index, auth);
         }
         Some(Commands::Copy { index }) => {
             ssh::copy(index);
@@ -149,24 +103,6 @@ fn main() {
         None => {
             ssh::list(&false);
         }
-        Some(Commands::Command { commands }) => match commands {
-            PluginCommands::List {} => {
-                cmd::list();
-            }
-            PluginCommands::Add {
-                name,
-                path,
-                command,
-            } => {
-                cmd::add(name, path, command);
-            }
-            PluginCommands::Remove { name } => {
-                cmd::remove(name);
-            }
-            PluginCommands::Run { index, name } => {
-                cmd::run(index, name);
-            }
-        },
     }
 
     std::process::exit(0);
