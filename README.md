@@ -1,3 +1,9 @@
+## update 0.3
+
+- Use standard ssh passwordless login
+- Force encrypted
+- Keep consistency in win and unix
+
 ## usage
 
 ```bash
@@ -80,14 +86,7 @@ in windows, you need download [putty.exe](https://www.chiark.greenend.org.uk/~sg
 
 the record file is location `$HOME/.autossh.toml`, you can change and backup it.
 
-if you don't know the location, you can use the debug mode command to find it.
-
-```bash
-❯ RUST_LOG=DEBUG autossh list
-[2024-06-19T10:04:22Z DEBUG  autossh::ssh::record] the record data located in `/home/idhyt/.autossh.toml`
-```
-
-## 💥 security 💥
+~~## 💥 security 💥~~
 
 the `password` fields is plaintext by default,
 
@@ -108,7 +107,7 @@ if you wish to encrypt it, import environment variables `ASKEY` before use.
 password = "IiaMr0ce4iKF5AvXf+rtFQ9mET0Ug4hLOoGeybzyOQx/lUvh"
 ```
 
-## plugins / command
+~~## plugins / command~~
 
 This is an experimental feature and may be refactored frequently.
 
@@ -147,13 +146,3 @@ D:\Downloads\autossh>autossh.exe plugin run -i 1 -n "login"
 ... you will see the login window ...
 ```
 
-🍻 Thanks [passh](https://github.com/clarkwang/passh)
-
-There are still some issues that need to be resolved for `passh`
-
-```bash
-❯ ./autossh login -i 1
-!! can't execute: ssh: Bad address (14)
-```
-
-ensure the ssh info correct and execute several times.
