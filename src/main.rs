@@ -1,50 +1,9 @@
 use clap::{Parser, Subcommand};
 use env_logger;
-use std::path::PathBuf;
 
 mod config;
 mod ssh;
 
-#[derive(Subcommand, Debug)]
-enum PluginCommands {
-    /// List the plugin.
-    #[clap(aliases = &["ls", "l"])]
-    List {},
-    /// Add the plugin.
-    Add {
-        /// the alias name for the plugin.
-        #[arg(short, long)]
-        name: String,
-        /// the plugin executable file path.
-        /// example:
-        ///    the absolute path: /path/to/plugin
-        ///    in system environment PATH: plugin
-        #[arg(short, long, verbatim_doc_comment)]
-        path: PathBuf,
-        /// the plugin command.
-        /// example:
-        ///    add: {PLUGIN} -p '{PASSWORD}' ssh -p {PORT} {USER}@{IP} ps -a
-        ///    run: /path/to/plugin -p 'password' ssh -p 22 idhyt@1.2.3.4 ps -a
-        #[arg(short, long, verbatim_doc_comment)]
-        command: String,
-    },
-    /// Remove the plugin by name.
-    #[clap(aliases = &["rm", "del", "delete"])]
-    Remove {
-        /// the name of the plugin.
-        #[arg(short, long)]
-        name: String,
-    },
-    /// Run the plugin command at remote server.
-    Run {
-        /// the remote server index.
-        #[arg(short, long)]
-        index: u16,
-        /// the name of the plugin.
-        #[arg(short, long)]
-        name: String,
-    },
-}
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -136,7 +95,6 @@ fn main() {
             ssh::remove(index);
         }
         Some(Commands::Login { index, auth }) => {
-            println!("login: {}, auth: {}", index, auth);
             ssh::login(index, auth);
         }
         Some(Commands::Copy { index }) => {
