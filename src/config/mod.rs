@@ -5,7 +5,14 @@ use crate::ssh::server::Remotes;
 use home;
 
 lazy_static::lazy_static! {
-    static ref CONFIG: PathBuf = home::home_dir().unwrap().join(".autossh.toml");
+    static ref CONFIG: PathBuf = {
+        let mut file = home::home_dir().unwrap().join(".config").join("autossh");
+        if !file.is_dir() {
+            std::fs::create_dir_all(&file).unwrap();
+        }
+        file.push("config.toml");
+        file
+    };
     pub static ref SSHKEY: SshKey = {
         let record = Recorder::load();
         if let Some(sshkey) = record.sshkey {
