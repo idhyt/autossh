@@ -10,7 +10,7 @@ use crate::config::SSHKEY;
 impl Remote {
     fn read_pub_key(&self) -> String {
         let pub_key = &SSHKEY.public;
-        println!("public key: `{}`", pub_key.display());
+        // println!("public key: `{}`", pub_key.display());
         assert!(
             pub_key.is_file(),
             "public key not found at: {}, you can generate it by `ssh-keygen`",
