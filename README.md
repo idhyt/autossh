@@ -13,20 +13,20 @@
 step1. 生成无密码登录的密钥
 
 ```bash
-ssh-keygen -t rsa -b 2048 -C "autossh" -N "" -f /path/to/.ssh/autossh_key
+ssh-keygen -t rsa -b 2048 -C "autossh" -N "" -f ~/.config/autossh/autossh_key
 ```
 
-step2. 将密钥路径写入配置文件 `$HOME/.autossh.toml`
+step2. 将密钥路径写入配置文件 `$HOME/.config/autossh/config.toml`
 
 ```toml
 [sshkey]
-private = "/home/idhyt/.ssh/autossh_key"
-public = "/home/idhyt/.ssh/autossh_key.pub"
+private = "/home/idhyt/.config/autossh/autossh_key"
+public = "/home/idhyt/.config/autossh/autossh_key.pub"
 ```
 
 后续登录就不会需要密码了，但请妥善保护好你的私钥文件！
 
-如果在其他机器上使用，只需要将 `private key`，`public key` 和 `.autossh.toml` 文件拷贝到其他机器即可。
+如果在其他机器上使用，只需要将 `$HOME/.config/autossh` 文件夹拷贝到其他机器即可。
 
 ## build
 
@@ -115,7 +115,7 @@ authorize again by `--auth` option, useful when the password is changed or copie
 
 ### backup or restore
 
-the record file is location `$HOME/.autossh.toml`, you can change and backup it manually.
+the record file is location `$HOME/.config/autossh/config.toml`, you can change and backup it manually.
 
 ~~## 💥 security 💥~~
 
@@ -138,7 +138,7 @@ if you wish to encrypt it, import environment variables `ASKEY` before use.
 +=======+========+=======+=========+======+==========+
 | 1     | ubuntu | idhyt | 1.2.3.4 | 22   | password |
 +-------+--------+-------+---------+------+----------+
-❯ cat ~/.autossh.toml | grep password
+❯ cat ~/.config/autossh/config.toml | grep password
 password = "IiaMr0ce4iKF5AvXf+rtFQ9mET0Ug4hLOoGeybzyOQx/lUvh"
 ```
 
