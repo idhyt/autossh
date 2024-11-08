@@ -28,10 +28,18 @@ public = "/home/idhyt/.config/autossh/autossh_key.pub"
 
 如果在其他机器上使用，只需要将 `$HOME/.config/autossh` 文件夹拷贝到其他机器即可。
 
-## build
+## build && install
+
+install by cargo
 
 ```bash
-git clone https://github.com/idhyt/autossh
+cargo install autossh
+```
+
+or build from source
+
+```bash
+git clone --depth=1 https://github.com/idhyt/autossh
 cd autossh && cargo build --release
 ```
 
