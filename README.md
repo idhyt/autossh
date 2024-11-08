@@ -1,25 +1,38 @@
+<img src="./demo.png" height="300" alt="demo">
+
 ## update 0.3
 
-- Use standard ssh passwordless login
-- Force encrypted (set `ASKEY` environment variable)
-- Keep consistency in win and unix
+- 使用标准的免密登录方式(更安全)
+- 强制加密 (确保设置了 `ASKEY` 环境变量)
+- 在win和unix系统下行为保持一致性
 
-Option use passwordless login.
+默认情况下，会使用 `$HOME/.ssh/id_rsa` 作为登录密钥，如果该密钥设置的密码，登录时需要输入该密钥设置的密码，推荐该方式。
 
-step1. generate ssh key with empty password
+可按照如下操作使用无密码登录:
+
+step1. 生成无密码登录的密钥
 
 ```bash
 ssh-keygen -t rsa -b 2048 -C "autossh" -N "" -f /path/to/.ssh/autossh_key
 ```
 
-step2. write config to `$HOME/.autossh.toml`
+step2. 将密钥路径写入配置文件 `$HOME/.autossh.toml`
 
 ```toml
-[[remotes.list]]
-...
 [sshkey]
 private = "/home/idhyt/.ssh/autossh_key"
 public = "/home/idhyt/.ssh/autossh_key.pub"
+```
+
+后续登录就不会需要密码了，但请妥善保护好你的私钥文件！
+
+如果在其他机器上使用，只需要将 `private key`，`public key` 和 `.autossh.toml` 文件拷贝到其他机器即可。
+
+## build
+
+```bash
+git clone https://github.com/idhyt/autossh
+cd autossh && cargo build --release
 ```
 
 ## usage
@@ -42,7 +55,7 @@ Options:
   -V, --version  Print version
 ```
 
-## add
+### add
 
 ```bash
 ❯ autossh add -u idhyt -p password -i 1.2.3.4 -n ubuntu
@@ -57,7 +70,7 @@ add other server info by `-N/--note` option, like `-N "expired at 2022-11-11"`
 
 note! the password need to be escaped if there are special characters in it. you can refer to the following [which-characters-need-to-be-escaped-when-using-bash](https://stackoverflow.com/questions/15783701/which-characters-need-to-be-escaped-when-using-bash)
 
-## remove/rm/delete/del
+### remove/rm/delete/del
 
 ```bash
 ❯ autossh rm -i 1
@@ -68,7 +81,7 @@ note! the password need to be escaped if there are special characters in it. you
 
 remove multiple records by `rm -i 1 2 3 ...`
 
-## list/ls/l
+### list/ls/l
 
 ```bash
 ❯ autossh ls
@@ -90,7 +103,7 @@ maybe `scp` something, add option parameter `-a/--all` to show password.
 +-------+--------+-------+---------+------+----------+
 ```
 
-## login
+### login
 
 ```bash
 ❯ autossh login -i 1
@@ -98,11 +111,11 @@ maybe `scp` something, add option parameter `-a/--all` to show password.
 Welcome to Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-156-generic x86_64)
 ```
 
-in windows, you need download [putty.exe](https://www.chiark.greenend.org.uk/~sgtatham/putty/) and place in the same directory as the tool.
+authorize again by `--auth` option, useful when the password is changed or copied to another machine
 
-## backup or restore
+### backup or restore
 
-the record file is location `$HOME/.autossh.toml`, you can change and backup it.
+the record file is location `$HOME/.autossh.toml`, you can change and backup it manually.
 
 ~~## 💥 security 💥~~
 
