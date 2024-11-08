@@ -1,4 +1,4 @@
-<img src="./demo.png" height="300" alt="demo">
+<img src="./demo.png" height="600" alt="demo">
 
 ## update 0.3
 
