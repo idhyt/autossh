@@ -1,3 +1,9 @@
+use std::io::BufRead;
+use std::io::BufReader;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -50,7 +56,7 @@ impl std::fmt::Display for Remote {
 impl Remote {
     pub fn login(&self) {
         log::debug!("login {} with {}", self, SSHKEY.private.display());
-        std::process::Command::new("ssh")
+        Command::new("ssh")
             .arg(format!("{}@{}", self.user, self.ip))
             .arg("-p")
             .arg(self.port.to_string())
@@ -58,6 +64,66 @@ impl Remote {
             .arg(SSHKEY.private.to_str().unwrap())
             .status()
             .expect("failed to login");
+    }
+
+    fn scp(&self, from: &str, to: &str, upload: bool) {
+        if upload {}
+        let cmd = if upload {
+            assert!(PathBuf::from(from).exists(), "file not found at: {}", from);
+            format!(
+                "-r -P {p} -i {k} {l} {u}@{i}:{r}",
+                p = &self.port,
+                k = SSHKEY.private.display(),
+                u = &self.user,
+                i = &self.ip,
+                l = from,
+                r = to,
+            )
+        } else {
+            format!(
+                "-r -P {p} -i {k} {u}@{i}:{r} {l}",
+                p = &self.port,
+                k = SSHKEY.private.display(),
+                u = &self.user,
+                i = &self.ip,
+                r = from,
+                l = to,
+            )
+        };
+        log::info!("\n🚨 scp {}\n🚨 input `y` to run and other to cancel.", cmd);
+        let mut read = String::new();
+        std::io::stdin()
+            .read_line(&mut read)
+            .expect("failed to read line");
+        let read = read.trim();
+        if read == "y" {
+            log::debug!("run command: scp {}", cmd);
+            let stdout = Command::new("scp")
+                .args(&cmd.split(' ').collect::<Vec<&str>>())
+                // .stdin(Stdio::piped())
+                // .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+                .stderr
+                .ok_or_else(|| "Could not capture standard output.")
+                .unwrap();
+            let reader = BufReader::new(stdout);
+            reader
+                .lines()
+                .filter_map(|line| line.ok())
+                .for_each(|line| println!("{}", line));
+        }
+    }
+
+    pub fn upload(&self, from: &str, to: &str) {
+        log::debug!("upload file from {} to {}:{}", from, self, to);
+        self.scp(from, to, true);
+    }
+
+    pub fn download(&self, from: &str, to: &str) {
+        log::debug!("download file from {}:{} to {}", self, from, to);
+        self.scp(from, to, false);
     }
 }
 

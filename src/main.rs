@@ -4,7 +4,6 @@ use env_logger;
 mod config;
 mod ssh;
 
-
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// List the remote server.
@@ -52,11 +51,14 @@ enum Commands {
         auth: bool,
     },
     /// Copy the file between remote server and local host.
-    #[clap(aliases = &["cp", "scp", "move", "mv"])]
+    #[clap(aliases = &["cp", "scp"])]
     Copy {
         /// the index of the remote server.
         #[arg(short, long)]
         index: u16,
+        /// the copy file path, like `local=remote`.
+        #[arg(short, long)]
+        path: String,
     },
 }
 
@@ -97,8 +99,8 @@ fn main() {
         Some(Commands::Login { index, auth }) => {
             ssh::login(index, auth);
         }
-        Some(Commands::Copy { index }) => {
-            ssh::copy(index);
+        Some(Commands::Copy { index, path }) => {
+            ssh::copy(index, path);
         }
         None => {
             ssh::list(&false);

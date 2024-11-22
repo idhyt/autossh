@@ -46,20 +46,30 @@ pub fn login(index: &u16, auth: &bool) {
     Recorder::load().remotes.get(index).unwrap().login();
 }
 
-pub fn copy(index: &u16) {
+pub fn copy(index: &u16, path: &str) {
+    // let recorder = Recorder::load();
+    // let remote = recorder.remotes.get(index).unwrap();
+    // log::info!(
+    //     r#"copy command example:
+    // > scp -P {p} /path/to/local {u}@{i}:/path/to/remote
+    // > rsync -rvzhP --port={p} /path/to/local {u}@{i}:/path/to/remote
+    // > passowrd: {pass}
+    //     "#,
+    //     p = &remote.port,
+    //     u = &remote.user,
+    //     i = &remote.ip,
+    //     pass = &remote.password
+    // );
+
+    let paths = path.split('=').collect::<Vec<&str>>();
+    assert!(paths.len() == 2, "path format error, like `from=to`");
     let recorder = Recorder::load();
     let remote = recorder.remotes.get(index).unwrap();
-    log::info!(
-        r#"copy command example:
-    > scp -P {p} /path/to/local {u}@{i}:/path/to/remote
-    > rsync -rvzhP --port={p} /path/to/local {u}@{i}:/path/to/remote
-    > passowrd: {pass}
-        "#,
-        p = &remote.port,
-        u = &remote.user,
-        i = &remote.ip,
-        pass = &remote.password
-    );
+    if std::path::PathBuf::from(paths[0]).exists() {
+        remote.upload(paths[0], paths[1]);
+    } else {
+        remote.download(paths[0], paths[1]);
+    }
 }
 
 // pub fn authorize(index: &Vec<u16>) {
