@@ -1,6 +1,16 @@
 <img src="./demo.png" height="600" alt="demo">
 
-## update 0.3
+## update 0.3.1
+
+- 增加scp功能（文件/目录）
+
+```bash
+❯ autossh scp -i 1 -p path1=path2
+```
+
+如果`path1`存在，则认为是从本地拷贝到远程服务器`path2`，反之则是从远程服务器拷贝到本地。
+
+## update 0.3.0
 
 - 使用标准的免密登录方式(更安全)
 - 强制加密 (确保设置了 `ASKEY` 环境变量)

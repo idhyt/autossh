@@ -65,7 +65,7 @@ enum Commands {
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.3.0 (dirty)",
+    version = "0.3.1",
     about = "ssh manager and auto login tool",
     long_about = None
 )]
