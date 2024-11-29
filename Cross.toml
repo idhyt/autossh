@@ -10,10 +10,12 @@ image = "idhyt/cross-rs-x86_64-unknown-linux-musl:0.2.5"
 image = "idhyt/cross-rs-aarch64-unknown-linux-musl:0.0.1"
 
 [target.x86_64-apple-darwin]
-image = "idhyt/cross-rs-x86_64-apple-darwin:0.0.1"
+# image = "idhyt/cross-rs-x86_64-apple-darwin:0.0.1"
+image = "yosyshq/cross-darwin-x64:2.2"
 
 [target.aarch64-apple-darwin]
-image = "idhyt/cross-rs-aarch64-apple-darwin:0.0.1"
+# image = "idhyt/cross-rs-aarch64-apple-darwin:0.0.1"
+image = "yosyshq/cross-darwin-arm64:2.2"
 
 [target.x86_64-pc-windows-gnu]
 image = "idhyt/cross-rs-x86_64-pc-windows-gnu:0.2.5"
