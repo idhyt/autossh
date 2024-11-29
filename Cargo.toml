@@ -1,8 +1,8 @@
 [package]
 name = "autossh"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
-authors = ["idhyt"]
+authors = ["idhyt3r@gmail.com"]
 license = "MIT"
 description = "ssh server manager and login without password"
 readme = "README.md"
