@@ -13,7 +13,7 @@
 ## update 0.3.0
 
 - 使用标准的免密登录方式(更安全)
-- 强制加密 (确保设置了 `ASKEY` 环境变量)
+- 强制加密 (确保设置了 `ASKEY` 环境变量，仅认证过程需要)
 - 在win和unix系统下行为保持一致性
 
 默认情况下，会使用 `$HOME/.ssh/id_rsa` 作为登录密钥，如果该密钥设置的密码，登录时需要输入该密钥设置的密码，推荐该方式。
@@ -51,6 +51,18 @@ or build from source
 ```bash
 git clone --depth=1 https://github.com/idhyt/autossh
 cd autossh && cargo build --release
+```
+
+or cross build for other platform
+
+```bash
+╰─ ./xbuild
+1) x86_64-unknown-linux-musl
+2) aarch64-unknown-linux-musl
+3) x86_64-apple-darwin
+4) aarch64-apple-darwin
+5) x86_64-pc-windows-gnu
+Select the target platform number:
 ```
 
 ## usage

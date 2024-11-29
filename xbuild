@@ -1,6 +1,5 @@
 #! /bin/bash
 # set -ex
-set -ex
 
 RELEASE_VERSION=${BUILD_VERSION:-0.1}
 
