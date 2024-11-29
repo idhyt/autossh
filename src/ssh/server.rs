@@ -7,7 +7,7 @@ use std::process::Stdio;
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::secure::{decrypt, encrypt, panic_if_not_secure};
+use super::secure::{decrypt, encrypt, panic_if_not_secure, KEY};
 use crate::config::SSHKEY;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -157,7 +157,16 @@ impl Remotes {
                 remote.port.to_string(),
             ];
             if all {
-                row.push(remote.password.clone());
+                if KEY.is_some() {
+                    row.push(remote.password.clone());
+                } else {
+                    row.push(format!(
+                        "{}..{}",
+                        &remote.password[..3],
+                        &remote.password[remote.password.len() - 5..]
+                    ));
+                }
+                // row.push(remote.password.clone());
                 row.push(remote.authorized.to_string());
                 row.push(remote.note.clone().unwrap_or_else(|| "".to_string()));
             }

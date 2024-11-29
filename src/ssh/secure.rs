@@ -5,7 +5,7 @@ use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use chacha20poly1305::ChaCha20Poly1305;
 
 lazy_static::lazy_static! {
-    static ref KEY: Option<String> = match std::env::var("ASKEY") {
+    pub static ref KEY: Option<String> = match std::env::var("ASKEY") {
         Ok(key) => {
             log::debug!("`ASKEY` found in environment variable.");
             Some(key)
