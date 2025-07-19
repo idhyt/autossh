@@ -1,8 +1,7 @@
 use clap::{Parser, Subcommand};
 use env_logger;
 
-mod config;
-mod ssh;
+use atsh_lib::{add, copy, list, loading, login, remove};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -39,13 +38,13 @@ enum Commands {
     Remove {
         /// the index of the remote server.
         #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
-        index: Vec<u16>,
+        index: Vec<usize>,
     },
     /// Login the remote server by index.
     Login {
         /// the index of the remote server.
         #[arg(short, long)]
-        index: u16,
+        index: usize,
         /// force authorize the remote server before login.
         #[arg(long, default_value = "false")]
         auth: bool,
@@ -55,7 +54,7 @@ enum Commands {
     Copy {
         /// the index of the remote server.
         #[arg(short, long)]
-        index: u16,
+        index: usize,
         /// the copy file path, like `local=remote`.
         #[arg(short, long)]
         path: String,
@@ -78,10 +77,11 @@ fn main() {
     let args = Cli::parse();
     env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"));
     // log::debug!("args: {:#?}", args);
+    loading().unwrap();
 
     match &args.command {
         Some(Commands::List { all }) => {
-            ssh::list(all);
+            list(*all);
         }
         Some(Commands::Add {
             user,
@@ -91,19 +91,21 @@ fn main() {
             name,
             note,
         }) => {
-            ssh::add(user, password, ip, port, name, note);
+            add(user, password, ip, port, name, note).unwrap();
+            list(false);
         }
         Some(Commands::Remove { index }) => {
-            ssh::remove(index);
+            remove(index).unwrap();
+            list(false);
         }
         Some(Commands::Login { index, auth }) => {
-            ssh::login(index, auth);
+            login(index, auth).unwrap();
         }
         Some(Commands::Copy { index, path }) => {
-            ssh::copy(index, path);
+            copy(index, path);
         }
         None => {
-            ssh::list(&false);
+            list(false);
         }
     }
 

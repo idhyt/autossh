@@ -5,11 +5,12 @@ use std::path::PathBuf;
 use ssh2::Session;
 
 use super::server::Remote;
-use crate::config::SSHKEY;
+use crate::get_records;
 
 impl Remote {
     fn read_pub_key(&self) -> String {
-        let pub_key = &SSHKEY.public;
+        let records = get_records();
+        let pub_key = &records.sshkey.as_ref().unwrap().public;
         // println!("public key: `{}`", pub_key.display());
         assert!(
             pub_key.is_file(),

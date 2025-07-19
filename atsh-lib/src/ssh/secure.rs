@@ -1,21 +1,20 @@
-use base64::{engine::general_purpose, Engine as _};
-use chacha20poly1305::aead::generic_array::typenum::Unsigned;
-use chacha20poly1305::aead::generic_array::GenericArray;
-use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
+use base64::{Engine as _, engine::general_purpose};
 use chacha20poly1305::ChaCha20Poly1305;
+use chacha20poly1305::aead::generic_array::GenericArray;
+use chacha20poly1305::aead::generic_array::typenum::Unsigned;
+use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
+use std::sync::LazyLock;
 
-lazy_static::lazy_static! {
-    pub static ref KEY: Option<String> = match std::env::var("ASKEY") {
-        Ok(key) => {
-            log::debug!("`ASKEY` found in environment variable.");
-            Some(key)
-        },
-        Err(_) => {
-            // log::warn!("💥 export `ASKEY` to protect password! 💥");
-            None
-        },
-    };
-}
+pub static KEY: LazyLock<Option<String>> = LazyLock::new(|| match std::env::var("ASKEY") {
+    Ok(key) => {
+        log::debug!("`ASKEY` found in environment variable.");
+        Some(key)
+    }
+    Err(_) => {
+        // log::warn!("💥 export `ASKEY` to protect password! 💥");
+        None
+    }
+});
 
 fn generate_key(key: Option<&str>) -> Vec<u8> {
     if key.is_none() {
@@ -107,7 +106,7 @@ mod tests {
         let key = generate_key(None);
         println!("secure key: {:?}", key);
         let key = "32 bit key must, if not, we will resize it.";
-        std::env::set_var("ASKEY", key);
+        unsafe { std::env::set_var("ASKEY", key) };
         let key = generate_key(Some(key));
         println!("secure key: {:?}", key);
         let data = "hello world";
