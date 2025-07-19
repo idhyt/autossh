@@ -1,0 +1,7 @@
+# # the ssh key used to connect to the remote host
+# # you can create one without password:
+# # ssh-keygen -t rsa -b 2048 -C "autossh" -N "" -f ~/.config/autossh/autossh_key
+# # if no set, will use $HOME/.ssh/id_rsa
+# [sshkey]
+# public = "/home/idhyt/.ssh/id_rsa.pub"
+# private = "/home/idhyt/.ssh/id_rsa"

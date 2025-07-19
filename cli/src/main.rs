@@ -1,7 +1,8 @@
 use clap::{Parser, Subcommand};
 use env_logger;
 
-use atsh_lib::{add, copy, list, loading, login, remove};
+use atsh_lib::atsh::{add, list, remove, login};
+use atsh_lib::{copy, loading};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -91,7 +92,7 @@ fn main() {
             name,
             note,
         }) => {
-            add(user, password, ip, port, name, note).unwrap();
+            add(user, password, ip, *port, name, note).unwrap();
             list(false);
         }
         Some(Commands::Remove { index }) => {
@@ -99,7 +100,7 @@ fn main() {
             list(false);
         }
         Some(Commands::Login { index, auth }) => {
-            login(index, auth).unwrap();
+            login(*index, *auth).unwrap();
         }
         Some(Commands::Copy { index, path }) => {
             copy(index, path);

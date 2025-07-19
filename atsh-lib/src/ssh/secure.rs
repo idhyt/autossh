@@ -3,9 +3,10 @@ use chacha20poly1305::ChaCha20Poly1305;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
+use std::io::{Error, ErrorKind};
 use std::sync::LazyLock;
 
-pub static KEY: LazyLock<Option<String>> = LazyLock::new(|| match std::env::var("ASKEY") {
+static ATSH_KEY: LazyLock<Option<String>> = LazyLock::new(|| match std::env::var("ASKEY") {
     Ok(key) => {
         log::debug!("`ASKEY` found in environment variable.");
         Some(key)
@@ -15,6 +16,17 @@ pub static KEY: LazyLock<Option<String>> = LazyLock::new(|| match std::env::var(
         None
     }
 });
+
+pub fn check_secure() -> Result<(), Error> {
+    if ATSH_KEY.is_none() {
+        Err(Error::new(
+            ErrorKind::NotFound,
+            "💥 Export `ASKEY` to protect password",
+        ))
+    } else {
+        Ok(())
+    }
+}
 
 fn generate_key(key: Option<&str>) -> Vec<u8> {
     if key.is_none() {
@@ -57,29 +69,30 @@ fn chacha_decrypt(obsf: &[u8], key: &[u8]) -> String {
 }
 
 pub fn encrypt(data: &str) -> String {
-    if KEY.is_none() {
+    if ATSH_KEY.is_none() {
         return data.to_string();
     }
     // log::debug!("we found `ASKEY` and will encrypt.");
-    let key = generate_key(KEY.as_deref());
+    let key = generate_key(ATSH_KEY.as_deref());
     let obsf = chacha_encrypt(data, &key);
     general_purpose::STANDARD_NO_PAD.encode(obsf)
 }
 
-pub fn decrypt(data: &str) -> String {
-    if KEY.is_none() {
+pub fn decrypt(data: impl AsRef<str>) -> String {
+    let data = data.as_ref();
+    if ATSH_KEY.is_none() {
         return data.to_string();
     }
     // log::debug!("we found `ASKEY` and will decrypt.");
     let obsf = general_purpose::STANDARD_NO_PAD
         .decode(data.as_bytes())
         .expect("decode failed by base64");
-    let key = generate_key(KEY.as_deref());
+    let key = generate_key(ATSH_KEY.as_deref());
     chacha_decrypt(&obsf, &key)
 }
 
 pub fn panic_if_not_secure() {
-    if KEY.is_none() {
+    if ATSH_KEY.is_none() {
         panic!("💥 export `ASKEY` to protect password! 💥");
     }
 }

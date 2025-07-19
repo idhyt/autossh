@@ -3,11 +3,22 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
-use ssh::server::Remotes;
+use ssh::remote::Remotes;
 
+mod config;
+mod db;
 mod ssh;
+
+pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|| {
+    |n| {
+        let mut work_dir =
+            std::env::current_exe().expect("failed to get current execute directory");
+        work_dir.pop();
+        work_dir.join(n)
+    }
+});
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SshKey {
@@ -109,61 +120,54 @@ fn get_mut_records() -> RwLockWriteGuard<'static, Recorder> {
     RECORDS.get().unwrap().write()
 }
 
-pub fn add(
-    user: &str,
-    password: &str,
-    ip: &str,
-    port: &u16,
-    name: &Option<String>,
-    note: &Option<String>,
-) -> Result<usize, Error> {
-    let mut records = get_mut_records();
-    let index = records.remotes.add(user, password, ip, port, name, note);
-    log::debug!("add remote success, index {}", index);
-    records.save()?;
-    // records.remotes.list();
-    Ok(index)
-}
+pub mod atsh {
+    use ssh2::DisconnectCode::Reserved;
+    use std::io::Error;
 
-pub fn list(all: bool) {
-    let recorder = get_records().load().unwrap();
-    if all {
-        recorder.remotes.list_all();
-    } else {
-        recorder.remotes.list();
+    use crate::ssh::remote::Remotes;
+    pub fn add(
+        user: &str,
+        password: &str,
+        ip: &str,
+        port: u16,
+        name: &Option<String>,
+        note: &Option<String>,
+    ) -> Result<usize, Error> {
+        Remotes::add(user, password, ip, port, name, note)
     }
-}
 
-pub fn remove(index: &Vec<usize>) -> Result<(), Error> {
-    let mut recorder = get_mut_records();
-    let left = recorder.remotes.delete(index);
-    log::debug!("remove remote success, {} index left", left);
-    recorder.save()?;
-    // recorder.remotes.list();
-    Ok(())
-}
-
-pub fn login(index: &usize, auth: &bool) -> Result<(), Error> {
-    if *auth {
-        let mut recorder = get_mut_records();
-        let remote = recorder.remotes.get_mut(index).unwrap();
-        remote.authorized();
-        recorder.save()?;
+    pub fn remove(index: &Vec<usize>) -> Result<usize, Error> {
+        Remotes::delete(index)
     }
-    get_records().remotes.get(index).unwrap().login();
-    Ok(())
+
+    pub fn list(all: bool) -> Result<(), Error> {
+        if all {
+            Remotes::list_all()
+        } else {
+            Remotes::list()
+        }
+    }
+
+    // auth params means try auth against the server
+    pub fn login(index: usize, auth: bool) -> Result<(), Error> {
+        let remote = Remotes::get(index)?;
+        if !remote.authorized || auth {
+            // TODO: auth
+        }
+        remote.login()
+    }
 }
 
 pub fn copy(index: &usize, path: &str) {
     let paths = path.split('=').collect::<Vec<&str>>();
     assert!(paths.len() == 2, "path format error, like `from=to`");
     let recorder = get_records();
-    let remote = recorder.remotes.get(index).unwrap();
-    if std::path::PathBuf::from(paths[0]).exists() {
-        remote.upload(paths[0], paths[1]);
-    } else {
-        remote.download(paths[0], paths[1]);
-    }
+    // let remote = recorder.remotes.0[index].unwrap();
+    // if std::path::PathBuf::from(paths[0]).exists() {
+    //     remote.upload(paths[0], paths[1]);
+    // } else {
+    //     remote.download(paths[0], paths[1]);
+    // }
 }
 
 #[cfg(test)]
@@ -180,7 +184,7 @@ mod tests {
         // unsafe {
         //     std::env::set_var("ASKEY", "test");
         // }
-        use crate::ssh::server::Remote;
+        use crate::ssh::remote::Remote;
         let remote = Remote {
             index: 1,
             user: "user".to_string(),

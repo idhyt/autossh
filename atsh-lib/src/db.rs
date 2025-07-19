@@ -6,7 +6,7 @@ use tracing::{info, warn};
 
 use crate::WORK_DIR_FILE;
 use crate::ssh::secure::{decrypt, encrypt};
-use crate::ssh::server::Remote;
+use crate::ssh::remote::Remote;
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
@@ -49,7 +49,7 @@ fn db_init(p: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-fn insert(conn: &Connection, remote: &Remote) -> Result<usize> {
+pub(crate) fn insert(conn: &Connection, remote: &Remote) -> Result<usize> {
     conn.execute(
         "INSERT INTO records (user, password, ip, port, authorized, name, note)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -65,7 +65,7 @@ fn insert(conn: &Connection, remote: &Remote) -> Result<usize> {
     )
 }
 
-fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote>> {
+pub(crate) fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote>> {
     let mut stmt = conn.prepare(
         "SELECT idx, user, password, ip, port, authorized, name, note 
          FROM records 
@@ -90,7 +90,7 @@ fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote>> {
     }
 }
 
-fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
+pub(crate) fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
     let mut stmt = conn.prepare("SELECT * FROM records")?;
     let records = stmt
         .query_map([], |row| {
@@ -109,7 +109,7 @@ fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
     Ok(records)
 }
 
-fn delete_index(conn: &Connection, idx: usize) -> Result<usize> {
+pub(crate) fn delete_index(conn: &Connection, idx: usize) -> Result<usize> {
     conn.execute("DELETE FROM records WHERE idx = ?", params![idx])
 }
 
@@ -118,7 +118,7 @@ fn delete_index(conn: &Connection, idx: usize) -> Result<usize> {
 mod tests {
     use super::*;
     #[test]
-    fn test() {
+    fn test_db() {
         let remote = Remote {
             index: 1,
             user: "user".to_string(),

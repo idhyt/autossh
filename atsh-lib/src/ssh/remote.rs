@@ -1,28 +1,33 @@
 use prettytable::{Cell, Row, Table};
 use std::io::{BufRead, BufReader};
+use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use tracing::{debug, info};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::secure::{KEY, decrypt, encrypt, panic_if_not_secure};
+use super::secure::{check_secure, decrypt, encrypt};
+use crate::db;
 use crate::get_records;
+use crate::config::CONFIG;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
     /// the index of the remote server.
+    // #[serde(rename = "idx")]
     pub index: usize,
     /// the login user.
     pub user: String,
     /// the login password.
     #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
-    /// have the authorized to login.
-    pub authorized: bool,
     /// the login id address.
     pub ip: String,
     /// the login port.
     pub port: u16,
+    /// have the authorized to login.
+    pub authorized: bool,
     /// the alias name for the login.
     pub name: Option<String>,
     /// the note for the server.
@@ -52,18 +57,18 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
-    pub fn login(&self) {
-        let records = get_records();
-        let sshkey = records.sshkey.as_ref().unwrap();
-        log::debug!("login {} with {}", self, sshkey.private.display());
+    pub fn login(&self) -> Result<(), Error>{
+        let sshkey = CONFIG.get_private_key();
+        debug!(remote=?self, "login");
         Command::new("ssh")
             .arg(format!("{}@{}", self.user, self.ip))
             .arg("-p")
             .arg(self.port.to_string())
             .arg("-i")
-            .arg(sshkey.private.to_str().unwrap())
+            .arg(sshkey.to_str().unwrap())
             .status()
             .expect("failed to login");
+        Ok(())
     }
 
     fn scp(&self, from: &str, to: &str, upload: bool) {
@@ -129,14 +134,90 @@ impl Remote {
     }
 }
 
-// #[derive(Debug, Default, Serialize, Deserialize, Clone)]
-// pub struct Remotes {
-//     pub list: Vec<Remote>,
-// }
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {
+    pub fn get(idx: usize) -> Result<Remote, Error> {
+        let remote = {
+            let conn = db::get_connection().lock();
+            db::query_index(&conn, idx)
+        }
+        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+
+        if let Some(r) = remote {
+            Ok(r)
+        } else {
+            Err(Error::new(
+                ErrorKind::NotFound,
+                format!("Remote {} not found", idx),
+            ))
+        }
+    }
+
+    pub fn add(
+        // &mut self,
+        user: &str,
+        password: &str,
+        ip: &str,
+        port: u16,
+        name: &Option<String>,
+        note: &Option<String>,
+    ) -> Result<usize, Error> {
+        check_secure()?;
+        let remote = Remote {
+            index: 0, // not used
+            user: user.to_string(),
+            password: password.to_string(),
+            ip: ip.to_string(),
+            port,
+            authorized: false,
+            name: name.clone(),
+            note: note.clone(),
+        };
+        // we not authorized the remote server until the first login
+        // remote.authorized();
+        debug!(remote = ?remote, "add");
+        let n = {
+            let conn = db::get_connection().lock();
+            db::insert(&conn, &remote)
+        }
+        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(n)
+    }
+
+    pub fn delete(
+        // &mut self,
+        index: &Vec<usize>,
+    ) -> Result<usize, Error> {
+        let conn = db::get_connection().lock();
+        let mut n = 0;
+        for idx in index.iter() {
+            debug!("delete index: {}", idx);
+            n += db::delete_index(&conn, *idx)
+                .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        }
+        Ok(n)
+    }
+
+    fn load() -> Result<Remotes, Error> {
+        let conn = db::get_connection().lock();
+        let remotes = db::query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(Remotes(remotes))
+    }
+
+    pub fn list() -> Result<(), Error> {
+        let remotes = Remotes::load()?;
+        remotes.pprint(false);
+        Ok(())
+    }
+
+    pub fn list_all() -> Result<(), Error> {
+        let remotes = Remotes::load()?;
+        remotes.pprint(true);
+        Ok(())
+    }
+
     fn pprint(&self, all: bool) {
         let mut table = Table::new();
         let mut titles = vec!["index", "name", "user", "ip", "port"];
@@ -161,7 +242,7 @@ impl Remotes {
                 remote.port.to_string(),
             ];
             if all {
-                if KEY.is_some() {
+                if let Ok(_) = check_secure() {
                     row.push(remote.password.clone());
                 } else {
                     row.push(format!(
@@ -184,17 +265,6 @@ impl Remotes {
         table.printstd();
     }
 
-    pub fn get(&self, index: &usize) -> Option<&Remote> {
-        let index = *index;
-        for remote in self.0.iter() {
-            if remote.index == index {
-                return Some(remote);
-            }
-        }
-        log::error!("the index {} not found", index);
-        None
-    }
-
     pub fn get_mut(&mut self, index: &usize) -> Option<&mut Remote> {
         let index = *index;
         for remote in self.0.iter_mut() {
@@ -204,55 +274,5 @@ impl Remotes {
         }
         log::error!("the index {} not found", index);
         None
-    }
-
-    pub fn list(&self) {
-        self.pprint(false);
-    }
-
-    pub fn list_all(&self) {
-        self.pprint(true);
-    }
-
-    pub fn add(
-        &mut self,
-        user: &str,
-        password: &str,
-        ip: &str,
-        port: &u16,
-        name: &Option<String>,
-        note: &Option<String>,
-    ) -> usize {
-        panic_if_not_secure();
-
-        let indexs = self.0.iter().map(|v| v.index).collect::<Vec<usize>>();
-        let index = indexs.iter().max().unwrap_or(&0) + 1;
-        let mut remote = Remote {
-            index,
-            user: user.to_string(),
-            password: password.to_string(),
-            authorized: false,
-            ip: ip.to_string(),
-            port: *port,
-            name: name.clone(),
-            note: note.clone(),
-        };
-        // remote.authorized();
-
-        log::debug!("add remote: {}", remote);
-        self.0.push(remote);
-        index
-    }
-
-    pub fn delete(&mut self, index: &Vec<usize>) -> usize {
-        for remote in self.0.iter_mut() {
-            if index.contains(&remote.index) {
-                remote.revoke();
-            }
-        }
-
-        self.0.retain(|v| !index.contains(&v.index));
-        // index
-        self.0.len()
     }
 }

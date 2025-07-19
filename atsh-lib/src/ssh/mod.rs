@@ -1,3 +1,3 @@
-mod secure;
-pub(crate) mod server;
+pub(crate) mod remote;
+pub(crate) mod secure;
 mod session;

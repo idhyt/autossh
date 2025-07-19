@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use ssh2::Session;
 
-use super::server::Remote;
+use super::remote::Remote;
 use crate::get_records;
 
 impl Remote {
