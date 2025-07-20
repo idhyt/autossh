@@ -1,8 +1,8 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use env_logger;
+use tracing::error;
 
-use atsh_lib::atsh::{add, list, remove, login};
-use atsh_lib::{copy, loading};
+use atsh_lib::atsh::{add, copy, list, login, remove};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -65,7 +65,7 @@ enum Commands {
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.3.2",
+    version = "0.3.3",
     about = "ssh manager and auto login tool",
     long_about = None
 )]
@@ -74,16 +74,10 @@ struct Cli {
     command: Option<Commands>,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
-    env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"));
-    // log::debug!("args: {:#?}", args);
-    loading().unwrap();
-
-    match &args.command {
-        Some(Commands::List { all }) => {
-            list(*all);
-        }
+    let result = match &args.command {
+        Some(Commands::List { all }) => list(*all),
         Some(Commands::Add {
             user,
             password,
@@ -92,23 +86,22 @@ fn main() {
             name,
             note,
         }) => {
-            add(user, password, ip, *port, name, note).unwrap();
-            list(false);
+            add(user, password, ip, *port, name, note)?;
+            list(false)
         }
         Some(Commands::Remove { index }) => {
-            remove(index).unwrap();
-            list(false);
+            remove(index)?;
+            list(false)
         }
-        Some(Commands::Login { index, auth }) => {
-            login(*index, *auth).unwrap();
-        }
-        Some(Commands::Copy { index, path }) => {
-            copy(index, path);
-        }
-        None => {
-            list(false);
-        }
+        Some(Commands::Login { index, auth }) => login(*index, *auth),
+        Some(Commands::Copy { index, path }) => copy(*index, path),
+        None => list(false),
+    };
+
+    if let Err(e) = result {
+        error!(error=?e, "Run {:?} command failed", args.command);
+        std::process::exit(1);
     }
 
-    std::process::exit(0);
+    Ok(())
 }

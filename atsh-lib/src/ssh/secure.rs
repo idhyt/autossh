@@ -5,16 +5,19 @@ use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use std::io::{Error, ErrorKind};
 use std::sync::LazyLock;
+use tracing::{debug, warn};
 
-static ATSH_KEY: LazyLock<Option<String>> = LazyLock::new(|| match std::env::var("ASKEY") {
-    Ok(key) => {
-        log::debug!("`ASKEY` found in environment variable.");
-        Some(key)
+static ATSH_KEY: LazyLock<Option<String>> = LazyLock::new(|| {
+    if let Ok(key) = std::env::var("ATSH_KEY") {
+        debug!("`ATSH_KEY` found in environment variable");
+        return Some(key);
     }
-    Err(_) => {
-        // log::warn!("💥 export `ASKEY` to protect password! 💥");
-        None
+    if let Ok(key) = std::env::var("ASKEY") {
+        warn!("💡 Deprecated `ASKEY` in next version and use `ATSH_KEY` instead");
+        return Some(key);
     }
+    // warn!("💥 export `ASKEY` to protect password! 💥");
+    None
 });
 
 pub fn check_secure() -> Result<(), Error> {
@@ -89,12 +92,6 @@ pub fn decrypt(data: impl AsRef<str>) -> String {
         .expect("decode failed by base64");
     let key = generate_key(ATSH_KEY.as_deref());
     chacha_decrypt(&obsf, &key)
-}
-
-pub fn panic_if_not_secure() {
-    if ATSH_KEY.is_none() {
-        panic!("💥 export `ASKEY` to protect password! 💥");
-    }
 }
 
 // tests

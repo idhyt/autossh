@@ -1,16 +1,14 @@
 use prettytable::{Cell, Row, Table};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::{BufRead, BufReader};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tracing::{debug, info};
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use super::secure::{check_secure, decrypt, encrypt};
-use crate::db;
-use crate::get_records;
 use crate::config::CONFIG;
+use crate::db;
+use crate::ssh::secure::{check_secure, decrypt, encrypt};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -57,7 +55,7 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
-    pub fn login(&self) -> Result<(), Error>{
+    pub fn login(&self) -> Result<(), Error> {
         let sshkey = CONFIG.get_private_key();
         debug!(remote=?self, "login");
         Command::new("ssh")
@@ -71,16 +69,15 @@ impl Remote {
         Ok(())
     }
 
-    fn scp(&self, from: &str, to: &str, upload: bool) {
-        let records = get_records();
-        let sshkey = records.sshkey.as_ref().unwrap();
+    fn scp(&self, from: &str, to: &str, upload: bool) -> Result<(), Error> {
+        let private_key = CONFIG.get_private_key();
         if upload {}
         let cmd = if upload {
             assert!(PathBuf::from(from).exists(), "file not found at: {}", from);
             format!(
                 "-r -P {p} -i {k} {l} {u}@{i}:{r}",
                 p = &self.port,
-                k = sshkey.private.display(),
+                k = private_key.display(),
                 u = &self.user,
                 i = &self.ip,
                 l = from,
@@ -90,47 +87,46 @@ impl Remote {
             format!(
                 "-r -P {p} -i {k} {u}@{i}:{r} {l}",
                 p = &self.port,
-                k = sshkey.private.display(),
+                k = private_key.display(),
                 u = &self.user,
                 i = &self.ip,
                 r = from,
                 l = to,
             )
         };
-        log::info!("\n🚨 scp {}\n🚨 input `y` to run and other to cancel.", cmd);
+        info!("\n🚨 scp {}\n🚨 input `y` to run and other to cancel.", cmd);
         let mut read = String::new();
-        std::io::stdin()
-            .read_line(&mut read)
-            .expect("failed to read line");
+        std::io::stdin().read_line(&mut read)?;
         let read = read.trim();
         if read == "y" {
-            log::debug!("run command: scp {}", cmd);
-            let stdout = Command::new("scp")
+            debug!("run command: scp {}", cmd);
+            let stderr = Command::new("scp")
                 .args(&cmd.split(' ').collect::<Vec<&str>>())
                 // .stdin(Stdio::piped())
                 // .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
-                .spawn()
-                .unwrap()
-                .stderr
-                .ok_or_else(|| "Could not capture standard output.")
-                .unwrap();
-            let reader = BufReader::new(stdout);
+                .spawn()?
+                .stderr;
+            if stderr.is_none() {
+                return Err(Error::new(ErrorKind::BrokenPipe, "stderr is none"));
+            }
+            let reader = BufReader::new(stderr.unwrap());
             reader
                 .lines()
                 .filter_map(|line| line.ok())
                 .for_each(|line| println!("{}", line));
         }
+        Ok(())
     }
 
-    pub fn upload(&self, from: &str, to: &str) {
-        log::debug!("upload file from {} to {}:{}", from, self, to);
-        self.scp(from, to, true);
+    pub fn upload(&self, from: &str, to: &str) -> Result<(), Error> {
+        debug!("upload file from {} to {}:{}", from, self, to);
+        self.scp(from, to, true)
     }
 
-    pub fn download(&self, from: &str, to: &str) {
-        log::debug!("download file from {}:{} to {}", self, from, to);
-        self.scp(from, to, false);
+    pub fn download(&self, from: &str, to: &str) -> Result<(), Error> {
+        debug!("download file from {}:{} to {}", self, from, to);
+        self.scp(from, to, false)
     }
 }
 
@@ -138,6 +134,11 @@ impl Remote {
 pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {
+    fn load() -> Result<Remotes, Error> {
+        let conn = db::get_connection().lock();
+        let remotes = db::query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(Remotes(remotes))
+    }
     pub fn get(idx: usize) -> Result<Remote, Error> {
         let remote = {
             let conn = db::get_connection().lock();
@@ -156,7 +157,6 @@ impl Remotes {
     }
 
     pub fn add(
-        // &mut self,
         user: &str,
         password: &str,
         ip: &str,
@@ -186,10 +186,7 @@ impl Remotes {
         Ok(n)
     }
 
-    pub fn delete(
-        // &mut self,
-        index: &Vec<usize>,
-    ) -> Result<usize, Error> {
+    pub fn delete(index: &Vec<usize>) -> Result<usize, Error> {
         let conn = db::get_connection().lock();
         let mut n = 0;
         for idx in index.iter() {
@@ -198,12 +195,6 @@ impl Remotes {
                 .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
         }
         Ok(n)
-    }
-
-    fn load() -> Result<Remotes, Error> {
-        let conn = db::get_connection().lock();
-        let remotes = db::query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
-        Ok(Remotes(remotes))
     }
 
     pub fn list() -> Result<(), Error> {
@@ -261,18 +252,7 @@ impl Remotes {
                     .collect::<Vec<Cell>>(),
             ));
         }
-        log::debug!("the remote list:\n{:#?}", self.0);
+        debug!("the remote list:\n{:#?}", self.0);
         table.printstd();
-    }
-
-    pub fn get_mut(&mut self, index: &usize) -> Option<&mut Remote> {
-        let index = *index;
-        for remote in self.0.iter_mut() {
-            if remote.index == index {
-                return Some(remote);
-            }
-        }
-        log::error!("the index {} not found", index);
-        None
     }
 }

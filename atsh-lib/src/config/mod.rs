@@ -1,5 +1,6 @@
 use home::home_dir;
 use serde::{Deserialize, Serialize};
+use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use tracing::{debug, warn};
@@ -62,9 +63,19 @@ impl Config {
     }
 
     pub fn get_private_key(&self) -> &Path {
-         self.sshkey.as_ref().unwrap().private.as_path()
+        self.sshkey.as_ref().unwrap().private.as_path()
     }
 
+    pub fn read_public_key(&self) -> Result<String, Error> {
+        let key = self.get_public_key();
+        if !key.is_file() {
+            return Err(Error::new(
+                ErrorKind::NotFound,
+                "public key not found, you can generate it by `ssh-keygen` and set it to config",
+            ));
+        }
+        std::fs::read_to_string(key)
+    }
 }
 
 #[cfg(test)]
