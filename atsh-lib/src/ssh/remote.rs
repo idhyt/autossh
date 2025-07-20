@@ -6,9 +6,10 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tracing::{debug, info};
 
+use super::secure::{check_secure, decrypt, encrypt};
+use super::session::SSHSession;
 use crate::config::CONFIG;
-use crate::db;
-use crate::ssh::secure::{check_secure, decrypt, encrypt};
+use crate::db::{self, delete_index, get_connection, update_authorized};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -55,7 +56,31 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
-    pub fn login(&self) -> Result<(), Error> {
+    // 确保先从数据库查询
+    pub fn delete(&self) -> Result<(), Error> {
+        // 删除认证
+        let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
+        session.revoke()?;
+        // 删除数据库
+        let conn = get_connection().lock();
+        delete_index(&conn, self.index).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(())
+    }
+
+    pub fn login(&self, reauth: bool) -> Result<(), Error> {
+        // 如果没有认证，或者通过 `--auth` 参数重新认证
+        if !self.authorized || reauth {
+            let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
+            session.authenticate()?;
+        }
+        if !self.authorized {
+            // update authorized to database
+            // self.authorized = true;
+            let conn = get_connection().lock();
+            update_authorized(&conn, self.index, true)
+                .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        }
+
         let sshkey = CONFIG.get_private_key();
         debug!(remote=?self, "login");
         Command::new("ssh")
@@ -64,8 +89,7 @@ impl Remote {
             .arg(self.port.to_string())
             .arg("-i")
             .arg(sshkey.to_str().unwrap())
-            .status()
-            .expect("failed to login");
+            .status()?;
         Ok(())
     }
 
@@ -187,12 +211,20 @@ impl Remotes {
     }
 
     pub fn delete(index: &Vec<usize>) -> Result<usize, Error> {
-        let conn = db::get_connection().lock();
         let mut n = 0;
+
         for idx in index.iter() {
             debug!("delete index: {}", idx);
-            n += db::delete_index(&conn, *idx)
-                .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+            // 查询是否存在
+            let find = {
+                let conn = db::get_connection().lock();
+                db::query_index(&conn, *idx)
+                    .map_err(|e| Error::new(std::io::ErrorKind::NotFound, e))?
+            };
+            if let Some(remote) = find {
+                remote.delete()?;
+                n += 1;
+            }
         }
         Ok(n)
     }

@@ -101,10 +101,7 @@ pub mod atsh {
     // auth params means try auth against the server
     pub fn login(index: usize, auth: bool) -> Result<(), Error> {
         let remote = Remotes::get(index)?;
-        if !remote.authorized || auth {
-            // TODO: auth
-        }
-        remote.login()
+        remote.login(auth)
     }
 
     pub fn copy(index: usize, path: &str) -> Result<(), Error> {

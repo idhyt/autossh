@@ -5,8 +5,8 @@ use std::sync::OnceLock;
 use tracing::{info, warn};
 
 use crate::WORK_DIR_FILE;
-use crate::ssh::secure::{decrypt, encrypt};
 use crate::ssh::remote::Remote;
+use crate::ssh::secure::{decrypt, encrypt};
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
@@ -111,6 +111,13 @@ pub(crate) fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
 
 pub(crate) fn delete_index(conn: &Connection, idx: usize) -> Result<usize> {
     conn.execute("DELETE FROM records WHERE idx = ?", params![idx])
+}
+
+pub(crate) fn update_authorized(conn: &Connection, idx: usize, authorized: bool) -> Result<usize> {
+    conn.execute(
+        "UPDATE records SET authorized = ?1 WHERE idx = ?2",
+        params![authorized, idx],
+    )
 }
 
 // test
