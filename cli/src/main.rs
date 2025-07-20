@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tracing::error;
+use tracing::{debug, error};
 
-use atsh_lib::atsh::{add, copy, list, login, remove};
+use atsh_lib::atsh::{add, copy, initialize, list, login, remove};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -76,6 +76,9 @@ struct Cli {
 
 fn main() -> Result<()> {
     let args = Cli::parse();
+    initialize(None).expect("initialize failed");
+    debug!(args = ?args);
+
     let result = match &args.command {
         Some(Commands::List { all }) => list(*all),
         Some(Commands::Add {
