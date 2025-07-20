@@ -124,18 +124,20 @@ pub(crate) fn update_authorized(conn: &Connection, idx: usize, authorized: bool)
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_db() {
         let remote = Remote {
             index: 1,
             user: "user".to_string(),
             password: "password".to_string(),
-            authorized: true,
+            authorized: false,
             ip: "1.2.3.4".to_string(),
             port: 2222,
             name: Some("name".to_string()),
             note: None,
         };
+
         // unsafe {std::env::set_var("ASKEY", "test");}
         // let enc_pwd = "HlT+Q0TYYpCrZNKfwM+Kg3VU3rE5hJ9jtohcGG0nU7qq2UOq";
         // test insert
@@ -147,6 +149,21 @@ mod tests {
             assert_eq!(n.unwrap(), 1);
             insert(&conn, &remote).unwrap();
         }
+
+        // update auth
+        {
+            let conn = get_connection().lock();
+            let n = update_authorized(&conn, 1, true);
+            assert!(n.is_ok());
+            assert_eq!(n.unwrap(), 1);
+            let conn = get_connection().lock();
+            let one = query_index(&conn, 1);
+            assert!(one.is_ok());
+            let one = one.unwrap().unwrap();
+            assert_eq!(one.authorized, true);
+        }
+
+
         // test query all
         let exist_idx = {
             let conn = get_connection().lock();

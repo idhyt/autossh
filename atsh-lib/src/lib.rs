@@ -10,12 +10,15 @@ mod ssh;
 static WORK_DIR: OnceLock<PathBuf> = OnceLock::new();
 pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|| {
     |n| {
-        // let mut work_dir =
-        //     std::env::current_exe().expect("failed to get current execute directory");
-        // work_dir.pop();
-        // work_dir.join(n)
-        let work_dir = WORK_DIR.get().expect("WORK_DIR not initialized");
-        work_dir.join(n)
+        if cfg!(test) {
+            let mut work_dir =
+                std::env::current_exe().expect("failed to get current execute directory");
+            work_dir.pop();
+            work_dir.join(n)
+        } else {
+            let work_dir = WORK_DIR.get().expect("WORK_DIR not initialized");
+            work_dir.join(n)
+        }
     }
 });
 
