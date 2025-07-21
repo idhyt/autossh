@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use tracing::error;
 
-use atsh_lib::atsh::{add, copy, initialize, list, login, remove};
+use atsh_lib::atsh::{add, download, initialize, list, login, remove, upload};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -49,15 +49,25 @@ enum Commands {
         #[arg(long, default_value = "false")]
         auth: bool,
     },
-    /// Copy the file between remote server and local host.
-    #[clap(aliases = &["cp", "scp"])]
-    Copy {
+    /// Upload the file from local host to remote server.
+    #[clap(aliases = &["up"])]
+    Upload {
         /// the index of the remote server.
         #[arg(short, long)]
         index: usize,
-        /// the copy file path, like `local=remote`.
+        /// the file path, like scp `/local/path /remote/path`.
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+        path: Vec<String>,
+    },
+    /// Download the file from remote server to local host.
+    #[clap(aliases = &["down", "dload"])]
+    Download {
+        /// the index of the remote server.
         #[arg(short, long)]
-        path: String,
+        index: usize,
+        /// the file path, like scp `/remote/path /local/path`.
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+        path: Vec<String>,
     },
 }
 
@@ -96,7 +106,8 @@ fn main() {
             Err(e) => Err(e),
         },
         Some(Commands::Login { index, auth }) => login(*index, *auth),
-        Some(Commands::Copy { index, path }) => copy(*index, path),
+        Some(Commands::Upload { index, path }) => upload(*index, path),
+        Some(Commands::Download { index, path }) => download(*index, path),
         None => list(false),
     };
 

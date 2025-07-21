@@ -66,7 +66,9 @@ pub mod atsh {
     use std::path::Path;
     use tracing::debug;
 
-    pub fn initialize(work_dir: Option<&Path>) -> Result<(), Error> {
+    type Result<T> = std::result::Result<T, Error>;
+
+    pub fn initialize(work_dir: Option<&Path>) -> Result<()> {
         let work_dir = work_dir.map(|p| p.to_path_buf()).unwrap_or({
             let mut work_dir =
                 std::env::current_exe().expect("failed to get current execute directory");
@@ -93,15 +95,15 @@ pub mod atsh {
         port: u16,
         name: &Option<String>,
         note: &Option<String>,
-    ) -> Result<usize, Error> {
+    ) -> Result<usize> {
         Remotes::add(user, password, ip, port, name, note)
     }
 
-    pub fn remove(index: &Vec<usize>) -> Result<usize, Error> {
+    pub fn remove(index: &Vec<usize>) -> Result<usize> {
         Remotes::delete(index)
     }
 
-    pub fn list(all: bool) -> Result<(), Error> {
+    pub fn list(all: bool) -> Result<()> {
         if all {
             Remotes::list_all()
         } else {
@@ -110,12 +112,12 @@ pub mod atsh {
     }
 
     // auth params means try auth against the server
-    pub fn login(index: usize, auth: bool) -> Result<(), Error> {
+    pub fn login(index: usize, auth: bool) -> Result<()> {
         let remote = Remotes::get(index)?;
         remote.login(auth)
     }
 
-    pub fn copy(index: usize, path: &str) -> Result<(), Error> {
+    pub fn copy(index: usize, path: &str) -> Result<()> {
         let paths = path.split('=').collect::<Vec<&str>>();
         if paths.len() != 2 {
             return Err(Error::new(
@@ -129,6 +131,33 @@ pub mod atsh {
         } else {
             remote.download(paths[0], paths[1])
         }
+    }
+
+    pub fn upload(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
+        if path.len() != 2 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "path format error, like `upload -p /local/path /remote/path`",
+            ));
+        }
+        let (local, remote) = (path[0].as_ref(), path[1].as_ref());
+        if !Path::new(local).exists() {
+            return Err(Error::new(ErrorKind::NotFound, "the upload file not found"));
+        }
+
+        Remotes::get(index)?.upload(local, remote)
+    }
+
+    pub fn download(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
+        if path.len() != 2 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "path format error, like `upload -p /remote/path /local/path`",
+            ));
+        }
+        let (remote, local) = (path[0].as_ref(), path[1].as_ref());
+
+        Remotes::get(index)?.download(remote, local)
     }
 }
 

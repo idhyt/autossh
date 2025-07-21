@@ -8,7 +8,7 @@ description = "ssh server manager and login without password"
 readme = "README.md"
 homepage = "https://github.com/idhyt/autossh"
 repository = "https://github.com/idhyt/autossh"
-keywords = ["ssh", "passwordless", "autossh"]
+keywords = ["ssh", "passwordless", "autossh", "@shell"]
 categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
