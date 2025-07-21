@@ -8,7 +8,7 @@ description = "autossh/@shell library is used to ssh login and allow automatical
 readme = "README.md"
 homepage = "https://github.com/idhyt/autossh/atsh-lib"
 repository = "https://github.com/idhyt/autossh/atsh-lib"
-keywords = ["ssh", "passwordless", "autossh", "@shell"]
+keywords = ["ssh", "passwordless", "autossh", "atshell"]
 categories = ["command-line-utilities"]
 
 [lib]
