@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 authors = ["idhyt3r@gmail.com"]
 license = "MIT"
-description = "autossh library"
+description = "autossh/@shell library"
 readme = "README.md"
-homepage = "https://github.com/idhyt/autossh"
-repository = "https://github.com/idhyt/autossh"
-keywords = ["ssh", "passwordless", "autossh"]
+homepage = "https://github.com/idhyt/autossh/atsh-lib"
+repository = "https://github.com/idhyt/autossh/atsh-lib"
+keywords = ["ssh", "passwordless", "autossh", "@shell"]
 categories = ["command-line-utilities"]
 
 [dependencies]
