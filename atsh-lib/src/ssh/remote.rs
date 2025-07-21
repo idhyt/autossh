@@ -199,8 +199,8 @@ impl Remotes {
         password: &str,
         ip: &str,
         port: u16,
-        name: &Option<String>,
-        note: &Option<String>,
+        name: &Option<impl AsRef<str>>,
+        note: &Option<impl AsRef<str>>,
     ) -> Result<usize, Error> {
         check_secure()?;
         let remote = Remote {
@@ -210,8 +210,8 @@ impl Remotes {
             ip: ip.to_string(),
             port,
             authorized: false,
-            name: name.clone(),
-            note: note.clone(),
+            name: name.as_ref().map(|n| n.as_ref().to_string()),
+            note: note.as_ref().map(|n| n.as_ref().to_string()),
         };
         // we not authorized the remote server until the first login
         // remote.authorized();

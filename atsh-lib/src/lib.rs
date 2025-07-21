@@ -95,8 +95,8 @@ pub mod atsh {
         password: &str,
         ip: &str,
         port: u16,
-        name: &Option<String>,
-        note: &Option<String>,
+        name: &Option<impl AsRef<str>>,
+        note: &Option<impl AsRef<str>>,
     ) -> Result<usize> {
         Remotes::add(user, password, ip, port, name, note)
     }
