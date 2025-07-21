@@ -72,8 +72,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "atsh"
+version = "0.4.0"
+dependencies = [
+ "atsh-lib 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap",
+ "tracing",
+]
+
+[[package]]
 name = "atsh-lib"
 version = "0.1.0"
+dependencies = [
+ "base64",
+ "chacha20poly1305",
+ "home",
+ "parking_lot",
+ "prettytable",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "ssh2",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "atsh-lib"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc14a9f4f80c2df225af6293e9ee742e7460a5cf286a4066fea58e64f1fb4d31"
 dependencies = [
  "base64",
  "chacha20poly1305",
@@ -95,15 +125,6 @@ name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
-
-[[package]]
-name = "autossh"
-version = "0.4.0"
-dependencies = [
- "atsh-lib",
- "clap",
- "tracing",
-]
 
 [[package]]
 name = "base64"

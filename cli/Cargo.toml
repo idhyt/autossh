@@ -1,20 +1,19 @@
 [package]
-name = "autossh"
+name = "atsh"
 version = "0.4.0"
 edition = "2021"
 authors = ["idhyt3r@gmail.com"]
 license = "MIT"
-description = "ssh server manager and login without password"
+description = "atsh/autossh is used to ssh login and allow automatically login without password"
 readme = "README.md"
 homepage = "https://github.com/idhyt/autossh"
 repository = "https://github.com/idhyt/autossh"
-keywords = ["ssh", "passwordless", "autossh", "@shell"]
+keywords = ["ssh", "passwordless", "autossh", "atshell"]
 categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-atsh-lib = { path = "../atsh-lib" }
-
+atsh-lib = "0.1.0"
 clap = { version = "4.5.41", features = ["derive"] }
 tracing = "0.1.41"
