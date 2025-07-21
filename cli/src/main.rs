@@ -74,8 +74,8 @@ enum Commands {
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.3.3",
-    about = "ssh manager and auto login tool",
+    version = "0.4.0 (non-release)",
+    about = "The atsh(@shell/autossh) is a simple ssh login tool and allow to automatically login with an empty password",
     long_about = None
 )]
 struct Cli {
