@@ -1,4 +1,4 @@
-The autossh/@shell library can be used.
+The autossh/@shell library can be used. See the cli tools [autossh](https://crates.io/crates/autossh)
 
 ```rust
 use atsh_lib::atsh::{add, download, initialize, list, login, remove, upload};
