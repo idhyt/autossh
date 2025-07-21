@@ -9,20 +9,23 @@
 该版本以后所有数据文件都保存在工具的同级目录：
 
 ```bash
-╰─ tree ~/app/autossh/
-~/app/autossh/
-├── atsh.db               # 数据库文件
-├── config.toml           # 可选，配置sshkey路径
-├── atsh_key              # config中配置的私钥文件（请注意保护）
-├── atsh_key.pub          # config中配置的公钥文件
-├── autossh
+╰─ tree ~/app/atsh/
+~/app/atsh/
+├── atsh                             # autossh.exe / atsh.exe in windows
+└── .atsh.d                          # atsh data
+    ├── atsh.db                      # records database
+    ├── atsh_key                     # ssh private key
+    ├── atsh_key.pub                 # ssh public key
+    ├── config.toml                  # config file with little information
+    └── logs                         # log directory
+        └── 2025-07-21.json
 ```
 
 将早期版本的数据迁移到数据库中，请执行以下命令：
 
 ```bash
 # 新工具所在的目录
-export ATSH_TOOL_DIR="/path/to/atsh/dir"
+export ATSH_TOOL_DIR="/path/to/atsh/.atsh.d"
 python tool.py toml2db -i ~/.config/autossh/config.toml -o $ATSH_TOOL_DIR
 ```
 
