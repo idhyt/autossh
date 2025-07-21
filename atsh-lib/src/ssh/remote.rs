@@ -3,7 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::{BufRead, BufReader};
 use std::io::{Error, ErrorKind};
 use std::process::{Command, Stdio};
-use tracing::debug;
+use tracing::{debug, info};
 
 use super::secure::{check_secure, decrypt, encrypt};
 use super::session::SSHSession;
@@ -63,6 +63,7 @@ impl Remote {
         // 删除数据库
         let conn = get_connection().lock();
         delete_index(&conn, self.index).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        info!(remote = self.to_string(), "success delete");
         Ok(())
     }
 
@@ -78,6 +79,7 @@ impl Remote {
             update_authorized(&conn, self.index, true)
                 .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
         }
+        info!(remote = self.to_string(), "success authenticate");
         Ok(())
     }
 
@@ -88,7 +90,6 @@ impl Remote {
         }
 
         let sshkey = CONFIG.get_private_key();
-        debug!(remote = self.to_string(), "login");
         Command::new("ssh")
             .arg(format!("{}@{}", self.user, self.ip))
             .arg("-p")
@@ -96,6 +97,7 @@ impl Remote {
             .arg("-i")
             .arg(sshkey.to_str().unwrap())
             .status()?;
+        info!(remote = self.to_string(), "success login");
         Ok(())
     }
 
@@ -128,7 +130,7 @@ impl Remote {
     }
 
     pub fn upload(&self, from: &str, to: &str) -> Result<(), Error> {
-        debug!(from = ?from, to=?to, "upload");
+        // debug!(from = ?from, to=?to, "upload");
         // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa ./test.txt idhyt@1.2.3.4:/tmp
         let port = self.port.to_string();
         let remote = format!("{}@{}:{}", self.user, self.ip, to);
@@ -141,11 +143,13 @@ impl Remote {
             from,
             &remote,
         ];
-        self.scp(&cmd)
+        self.scp(&cmd)?;
+        info!(from=?from, to=?to, "susccess upload");
+        Ok(())
     }
 
     pub fn download(&self, from: &str, to: &str) -> Result<(), Error> {
-        debug!(from = ?from, to=?to, "download");
+        // debug!(from = ?from, to=?to, "download");
         // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa idhyt@1.2.3.4:/tmp/test.txt ./
         let port = self.port.to_string();
         let remote = format!("{}@{}:{}", self.user, self.ip, from);
@@ -158,7 +162,9 @@ impl Remote {
             &remote,
             to,
         ];
-        self.scp(&cmd)
+        self.scp(&cmd)?;
+        info!(from=?from, to=?to, "susccess download");
+        Ok(())
     }
 }
 
@@ -209,12 +215,13 @@ impl Remotes {
         };
         // we not authorized the remote server until the first login
         // remote.authorized();
-        debug!(remote = remote.to_string(), "add");
+        // debug!(remote = remote.to_string(), "add");
         let n = {
             let conn = db::get_connection().lock();
             db::insert(&conn, &remote)
         }
         .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        info!(remote = remote.to_string(), "add remote success");
         Ok(n)
     }
 
@@ -222,7 +229,7 @@ impl Remotes {
         let mut n = 0;
 
         for idx in index.iter() {
-            debug!("delete index: {}", idx);
+            debug!(index = idx, "delete");
             // 查询是否存在
             let find = {
                 let conn = db::get_connection().lock();
@@ -239,12 +246,14 @@ impl Remotes {
 
     pub fn list() -> Result<(), Error> {
         let remotes = Remotes::load()?;
+        info!(all = false, "susccess list remotes {}", remotes.0.len());
         remotes.pprint(false);
         Ok(())
     }
 
     pub fn list_all() -> Result<(), Error> {
         let remotes = Remotes::load()?;
+        info!(all = true, "susccess list remotes {}", remotes.0.len());
         remotes.pprint(true);
         Ok(())
     }

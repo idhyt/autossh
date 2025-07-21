@@ -10,10 +10,9 @@ static WORK_DIR: OnceLock<PathBuf> = OnceLock::new();
 pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|| {
     |n| {
         if cfg!(test) {
-            let mut work_dir =
+            let work_dir =
                 std::env::current_exe().expect("failed to get current execute directory");
-            work_dir.pop();
-            work_dir.join(n)
+            work_dir.with_file_name("test.atsh.d")
         } else {
             let work_dir = WORK_DIR.get().expect("WORK_DIR not initialized");
             work_dir.join(n)
@@ -70,10 +69,11 @@ pub mod atsh {
 
     pub fn initialize(work_dir: Option<&Path>) -> Result<()> {
         let work_dir = work_dir.map(|p| p.to_path_buf()).unwrap_or({
-            let mut work_dir =
+            let work_dir =
                 std::env::current_exe().expect("failed to get current execute directory");
-            work_dir.pop();
-            work_dir
+            // work_dir.pop();
+            // work_dir
+            work_dir.with_file_name(".atsh.d")
         });
         debug!("work_dir: {}", work_dir.display());
 
@@ -85,6 +85,8 @@ pub mod atsh {
         WORK_DIR
             .set(work_dir)
             .expect("WORK_DIR already initialized");
+
+        // info!(work=?WORK_DIR.get(), "success initialize");
         Ok(())
     }
 
