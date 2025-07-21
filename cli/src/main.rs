@@ -1,8 +1,7 @@
 use clap::{Parser, Subcommand};
-use env_logger;
+use tracing::error;
 
-mod config;
-mod ssh;
+use atsh_lib::atsh::{add, download, initialize, list, login, remove, upload};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -39,34 +38,44 @@ enum Commands {
     Remove {
         /// the index of the remote server.
         #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
-        index: Vec<u16>,
+        index: Vec<usize>,
     },
     /// Login the remote server by index.
     Login {
         /// the index of the remote server.
         #[arg(short, long)]
-        index: u16,
+        index: usize,
         /// force authorize the remote server before login.
         #[arg(long, default_value = "false")]
         auth: bool,
     },
-    /// Copy the file between remote server and local host.
-    #[clap(aliases = &["cp", "scp"])]
-    Copy {
+    /// Upload the file from local host to remote server.
+    #[clap(aliases = &["up"])]
+    Upload {
         /// the index of the remote server.
         #[arg(short, long)]
-        index: u16,
-        /// the copy file path, like `local=remote`.
+        index: usize,
+        /// the file path, like scp `/local/path /remote/path`.
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+        path: Vec<String>,
+    },
+    /// Download the file from remote server to local host.
+    #[clap(aliases = &["down", "dload"])]
+    Download {
+        /// the index of the remote server.
         #[arg(short, long)]
-        path: String,
+        index: usize,
+        /// the file path, like scp `/remote/path /local/path`.
+        #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+        path: Vec<String>,
     },
 }
 
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.3.2",
-    about = "ssh manager and auto login tool",
+    version = "0.4.0 (non-release)",
+    about = "The atsh(@shell/autossh) is a simple ssh login tool and allow to automatically login with an empty password",
     long_about = None
 )]
 struct Cli {
@@ -76,13 +85,11 @@ struct Cli {
 
 fn main() {
     let args = Cli::parse();
-    env_logger::init_from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"));
-    // log::debug!("args: {:#?}", args);
+    initialize(None).expect("initialize failed");
+    // debug!(args = ?args); !!! don't do that, info leak
 
-    match &args.command {
-        Some(Commands::List { all }) => {
-            ssh::list(all);
-        }
+    let result = match &args.command {
+        Some(Commands::List { all }) => list(*all),
         Some(Commands::Add {
             user,
             password,
@@ -90,22 +97,23 @@ fn main() {
             port,
             name,
             note,
-        }) => {
-            ssh::add(user, password, ip, port, name, note);
-        }
-        Some(Commands::Remove { index }) => {
-            ssh::remove(index);
-        }
-        Some(Commands::Login { index, auth }) => {
-            ssh::login(index, auth);
-        }
-        Some(Commands::Copy { index, path }) => {
-            ssh::copy(index, path);
-        }
-        None => {
-            ssh::list(&false);
-        }
-    }
+        }) => match add(user, password, ip, *port, name, note) {
+            Ok(_) => list(false),
+            Err(e) => Err(e),
+        },
+        Some(Commands::Remove { index }) => match remove(index) {
+            Ok(_) => list(false),
+            Err(e) => Err(e),
+        },
+        Some(Commands::Login { index, auth }) => login(*index, *auth),
+        Some(Commands::Upload { index, path }) => upload(*index, path),
+        Some(Commands::Download { index, path }) => download(*index, path),
+        None => list(false),
+    };
 
-    std::process::exit(0);
+    if let Err(e) = result {
+        error!(error=?e, "Run command failed");
+        std::process::exit(1);
+    }
+    std::process::exit(1);
 }
