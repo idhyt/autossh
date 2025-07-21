@@ -1,6 +1,5 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tracing::{debug, error};
+use tracing::error;
 
 use atsh_lib::atsh::{add, copy, initialize, list, login, remove};
 
@@ -74,10 +73,10 @@ struct Cli {
     command: Option<Commands>,
 }
 
-fn main() -> Result<()> {
+fn main() {
     let args = Cli::parse();
     initialize(None).expect("initialize failed");
-    debug!(args = ?args);
+    // debug!(args = ?args); !!! don't do that, info leak
 
     let result = match &args.command {
         Some(Commands::List { all }) => list(*all),
@@ -88,23 +87,22 @@ fn main() -> Result<()> {
             port,
             name,
             note,
-        }) => {
-            add(user, password, ip, *port, name, note)?;
-            list(false)
-        }
-        Some(Commands::Remove { index }) => {
-            remove(index)?;
-            list(false)
-        }
+        }) => match add(user, password, ip, *port, name, note) {
+            Ok(_) => list(false),
+            Err(e) => Err(e),
+        },
+        Some(Commands::Remove { index }) => match remove(index) {
+            Ok(_) => list(false),
+            Err(e) => Err(e),
+        },
         Some(Commands::Login { index, auth }) => login(*index, *auth),
         Some(Commands::Copy { index, path }) => copy(*index, path),
         None => list(false),
     };
 
     if let Err(e) = result {
-        error!(error=?e, "Run {:?} command failed", args.command);
+        error!(error=?e, "Run command failed");
         std::process::exit(1);
     }
-
-    Ok(())
+    std::process::exit(1);
 }

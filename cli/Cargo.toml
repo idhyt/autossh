@@ -16,7 +16,5 @@ categories = ["command-line-utilities"]
 [dependencies]
 atsh-lib = { path = "../atsh-lib" }
 
-anyhow = "1.0.98"
 clap = { version = "4.5.41", features = ["derive"] }
 tracing = "0.1.41"
-

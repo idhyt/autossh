@@ -2,7 +2,7 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, Result, params};
 use std::path::Path;
 use std::sync::OnceLock;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 use crate::WORK_DIR_FILE;
 use crate::ssh::remote::Remote;
@@ -24,9 +24,9 @@ pub fn get_connection() -> &'static Mutex<Connection> {
 
 fn db_init(p: &Path) -> Result<Connection> {
     if p.is_file() {
-        info!(file=?p, "Loading Database exists and using it");
+        debug!(file=?p, "Loading Database exists and using");
     } else {
-        warn!(file=?p, "Loading Database not found, creating a new one");
+        warn!(file=?p, "Loading Database not found and new one");
     }
     let conn = Connection::open(p)?;
     // 创建表（如果不存在）
@@ -137,7 +137,8 @@ mod tests {
             name: Some("name".to_string()),
             note: None,
         };
-
+        // init
+        crate::atsh::initialize(Some(Path::new("."))).unwrap();
         // unsafe {std::env::set_var("ASKEY", "test");}
         // let enc_pwd = "HlT+Q0TYYpCrZNKfwM+Kg3VU3rE5hJ9jtohcGG0nU7qq2UOq";
         // test insert
@@ -162,7 +163,6 @@ mod tests {
             let one = one.unwrap().unwrap();
             assert_eq!(one.authorized, true);
         }
-
 
         // test query all
         let exist_idx = {

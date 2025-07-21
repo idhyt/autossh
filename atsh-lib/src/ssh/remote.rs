@@ -82,7 +82,7 @@ impl Remote {
         }
 
         let sshkey = CONFIG.get_private_key();
-        debug!(remote=?self, "login");
+        debug!(remote = self.to_string(), "login");
         Command::new("ssh")
             .arg(format!("{}@{}", self.user, self.ip))
             .arg("-p")
@@ -201,7 +201,7 @@ impl Remotes {
         };
         // we not authorized the remote server until the first login
         // remote.authorized();
-        debug!(remote = ?remote, "add");
+        debug!(remote = remote.to_string(), "add");
         let n = {
             let conn = db::get_connection().lock();
             db::insert(&conn, &remote)
@@ -284,7 +284,7 @@ impl Remotes {
                     .collect::<Vec<Cell>>(),
             ));
         }
-        debug!("the remote list:\n{:#?}", self.0);
+        debug!("the remote list total: {}", self.0.len());
         table.printstd();
     }
 }

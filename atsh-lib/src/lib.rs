@@ -1,4 +1,3 @@
-use chrono::Local;
 use std::io::Error;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, OnceLock};
@@ -27,11 +26,11 @@ fn setup_logging(work_dir: &Path) -> Result<(), Error> {
     use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
     let log_dir = work_dir.join("logs");
-    if !log_dir.exists() {
+    if !log_dir.is_dir() {
         std::fs::create_dir_all(&log_dir)?;
     }
-    let log_file = log_dir.join(format!("{}.log", Local::now().format("%Y-%m-%d")));
-    let file_appender = RollingFileAppender::new(Rotation::DAILY, log_dir, log_file);
+    // let log_file = log_dir.join(format!("{}.log", Local::now().format("%Y-%m-%d")));
+    // let file_appender = RollingFileAppender::new(Rotation::DAILY, log_dir, log_file);
 
     let subscriber = tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
@@ -41,10 +40,19 @@ fn setup_logging(work_dir: &Path) -> Result<(), Error> {
                 .with_target(true)
                 .with_line_number(true),
         )
-        .with(fmt::Layer::new().with_writer(file_appender));
+        .with(
+            fmt::Layer::new().json().with_writer(
+                RollingFileAppender::builder()
+                    .rotation(Rotation::DAILY)
+                    .filename_prefix("atsh.log")
+                    .filename_suffix("json")
+                    .build(log_dir)
+                    .expect("Failed to create log file"),
+            ),
+        );
 
     subscriber.init();
-    tracing::info!(
+    tracing::debug!(
         "Logging initialized (RUST_LOG={})",
         std::env::var("RUST_LOG").unwrap_or_default()
     );

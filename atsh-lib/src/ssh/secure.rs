@@ -24,7 +24,7 @@ pub fn check_secure() -> Result<(), Error> {
     if ATSH_KEY.is_none() {
         Err(Error::new(
             ErrorKind::NotFound,
-            "💥 Export `ASKEY` to protect password",
+            "💥 Export `ATSH_KEY` to protect password",
         ))
     } else {
         Ok(())
