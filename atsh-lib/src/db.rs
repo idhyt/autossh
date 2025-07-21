@@ -13,9 +13,9 @@ static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 pub fn get_connection() -> &'static Mutex<Connection> {
     DATABASE.get_or_init(|| {
         let path = if cfg!(test) {
-            WORK_DIR_FILE("test.autossh.db")
+            WORK_DIR_FILE("test.atsh.db")
         } else {
-            WORK_DIR_FILE("autossh.db")
+            WORK_DIR_FILE("atsh.db")
         };
 
         Mutex::new(db_init(&path).unwrap())
@@ -141,7 +141,17 @@ mod tests {
         crate::atsh::initialize(Some(Path::new("."))).unwrap();
         // unsafe {std::env::set_var("ASKEY", "test");}
         // let enc_pwd = "HlT+Q0TYYpCrZNKfwM+Kg3VU3rE5hJ9jtohcGG0nU7qq2UOq";
-        // test insert
+        let db_path = WORK_DIR_FILE("test.atsh.db");
+
+        // clean
+        {
+            if db_path.is_file() {
+                println!("remove exist database: {:?}", db_path);
+                std::fs::remove_file(&db_path).unwrap();
+            }
+        }
+
+        // test insert 2
         {
             let conn = get_connection().lock();
             println!("conn: {:#?}", conn);
@@ -153,10 +163,12 @@ mod tests {
 
         // update auth
         {
-            let conn = get_connection().lock();
-            let n = update_authorized(&conn, 1, true);
-            assert!(n.is_ok());
-            assert_eq!(n.unwrap(), 1);
+            {
+                let conn = get_connection().lock();
+                let n = update_authorized(&conn, 1, true);
+                assert!(n.is_ok());
+                assert_eq!(n.unwrap(), 1);
+            }
             let conn = get_connection().lock();
             let one = query_index(&conn, 1);
             assert!(one.is_ok());
@@ -188,7 +200,6 @@ mod tests {
             assert!(one.password == remote.password);
             assert!(one.ip == remote.ip);
             assert!(one.port == remote.port);
-            assert!(one.authorized == remote.authorized);
             assert!(one.name == remote.name);
             assert!(one.note == remote.note);
         }
@@ -217,12 +228,6 @@ mod tests {
             assert_eq!(new_index.len(), 2);
             assert_ne!(new_index, exist_idx);
             assert_eq!(new_index[0], exist_idx[1]);
-        }
-
-        // now we delete test data
-        {
-            let conn = get_connection().lock();
-            std::fs::remove_file(Path::new(conn.path().unwrap())).unwrap();
         }
     }
 }

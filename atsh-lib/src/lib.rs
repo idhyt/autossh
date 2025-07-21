@@ -44,7 +44,7 @@ fn setup_logging(work_dir: &Path) -> Result<(), Error> {
             fmt::Layer::new().json().with_writer(
                 RollingFileAppender::builder()
                     .rotation(Rotation::DAILY)
-                    .filename_prefix("atsh.log")
+                    // .filename_prefix("atsh.log")
                     .filename_suffix("json")
                     .build(log_dir)
                     .expect("Failed to create log file"),
