@@ -2,11 +2,12 @@
 
 ## update 0.4.0
 
-- 大量重构，将存储方式改为数据库
-- 删除`scp`功能，直接使用`upload/download`功能
-- 环境变量 `ASKEY` 改为 `ATSH_KEY`
+- 优化和重构，将存储方式改为数据库
+- 使用 `upload/download` 功能替换 `scp` 功能
+- 环境变量改为 `ATSH_KEY` ( 暂时兼容 `ASKEY` )
+- 编译的可执行文件从 `autossh` 改为 `atsh`
 
-该版本以后所有数据文件都保存在工具的同级目录：
+该版本以后所有数据文件都保存在工具的同级目录，方便迁移：
 
 ```bash
 ╰─ tree ~/app/atsh/
