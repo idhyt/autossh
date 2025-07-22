@@ -38,12 +38,6 @@ fn patch_file(file: &Path, key: &str, value: &str) {
 }
 
 fn main() {
-    // in cargo publish, do noting
-    if std::env::var("CARGO_PKG_NAME").is_ok() {
-        println!("warning: do nothing in cargo publish process");
-        return;
-    }
-
     // if cross compiling, unsupport get version because of no git
     if std::env::var("CROSS_RUNNER").is_ok() {
         println!("warning: cross compiling, unsupport get version");
@@ -59,6 +53,12 @@ fn main() {
 
     let version_code = format!("    version = \"{}\",", version);
     patch_file(&cli_path, "version", &version_code);
+
+    // in cargo publish, do noting
+    if std::env::var("CARGO_PKG_NAME").is_ok() {
+        println!("warning: not change name in cargo publish process");
+        return;
+    }
 
     let package_toml = build_dir.join("Cargo.toml");
     assert!(package_toml.is_file());
