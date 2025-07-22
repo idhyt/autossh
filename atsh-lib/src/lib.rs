@@ -22,32 +22,51 @@ pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|
 
 fn setup_logging(work_dir: &Path) -> Result<(), Error> {
     use tracing_appender::rolling::{RollingFileAppender, Rotation};
-    use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+    use tracing_subscriber::{
+        filter::LevelFilter,
+        fmt::{
+            self,
+            time::{LocalTime, UtcTime},
+        },
+        layer::SubscriberExt,
+        util::SubscriberInitExt,
+        EnvFilter,
+    };
 
     let log_dir = work_dir.join("logs");
     if !log_dir.is_dir() {
         std::fs::create_dir_all(&log_dir)?;
     }
-    // let log_file = log_dir.join(format!("{}.log", Local::now().format("%Y-%m-%d")));
-    // let file_appender = RollingFileAppender::new(Rotation::DAILY, log_dir, log_file);
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let debug = filter
+        .max_level_hint()
+        .map(|level| level >= LevelFilter::DEBUG)
+        .unwrap_or(false);
 
     let subscriber = tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(filter)
         .with(
             fmt::Layer::new()
                 .with_writer(std::io::stderr)
-                .with_target(true)
-                .with_line_number(true),
+                .with_target(debug)
+                .with_line_number(debug)
+                .with_timer(LocalTime::rfc_3339()),
         )
         .with(
-            fmt::Layer::new().json().with_writer(
-                RollingFileAppender::builder()
-                    .rotation(Rotation::DAILY)
-                    // .filename_prefix("atsh.log")
-                    .filename_suffix("json")
-                    .build(log_dir)
-                    .expect("Failed to create log file"),
-            ),
+            fmt::Layer::new()
+                .json()
+                .with_writer(
+                    RollingFileAppender::builder()
+                        .rotation(Rotation::DAILY)
+                        // .filename_prefix("atsh.log")
+                        .filename_suffix("json")
+                        .build(log_dir)
+                        .expect("Failed to create log file"),
+                )
+                .with_target(debug)
+                .with_line_number(debug)
+                .with_timer(UtcTime::rfc_3339()),
         );
 
     subscriber.init();
@@ -60,7 +79,7 @@ fn setup_logging(work_dir: &Path) -> Result<(), Error> {
 
 pub mod atsh {
     use crate::ssh::remote::Remotes;
-    use crate::{WORK_DIR, setup_logging};
+    use crate::{setup_logging, WORK_DIR};
     use std::io::{Error, ErrorKind};
     use std::path::Path;
     use tracing::debug;
