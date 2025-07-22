@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const VERSION: &str = "0.4.0";
+const VERSION: &str = "0.4.1";
 
 fn get_version() -> String {
     // 获取 commit hash 前10位
@@ -38,6 +38,14 @@ fn patch_file(file: &Path, key: &str, value: &str) {
 }
 
 fn main() {
+    println!("{:#?}", std::env::vars().collect::<std::collections::HashMap<_, _>>());
+
+    // in cargo publish, do noting
+    if std::env::var("CARGO_PKG_PUBLISHED").is_ok() {
+        println!("warning: do nothing in cargo publish process");
+        return;
+    }
+
     // if cross compiling, unsupport get version because of no git
     if std::env::var("CROSS_RUNNER").is_ok() {
         println!("warning: cross compiling, unsupport get version");
@@ -53,12 +61,6 @@ fn main() {
 
     let version_code = format!("    version = \"{}\",", version);
     patch_file(&cli_path, "version", &version_code);
-
-    // in cargo publish, do noting
-    if std::env::var("CARGO_PKG_NAME").is_ok() {
-        println!("warning: not change name in cargo publish process");
-        return;
-    }
 
     let package_toml = build_dir.join("Cargo.toml");
     assert!(package_toml.is_file());
