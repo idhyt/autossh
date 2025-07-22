@@ -16,10 +16,10 @@ function build_target() {
     name=$2
     # RUN in host test and build.rs
     cargo build
-    if [[ "$platform" == *"linux-musl"* ]]; then
-        cross build --release --target $platform --features openssl -vv
-    else
+    if [[ "$platform" == *"x86_64-pc-windows"* ]]; then
         cross build --release --target $platform -vv
+    else
+        cross build --release --target $platform --features openssl -vv
     fi
     [ -d "./dist" ] || mkdir -p dist
     cp target/$platform/release/$name ./dist/$platform.$name
