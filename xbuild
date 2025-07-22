@@ -2,6 +2,7 @@
 # set -ex
 
 RELEASE_VERSION=${BUILD_VERSION:-0.1}
+PKG_NAME=atsh
 
 function set_version() {
     date=$(git show --pretty=format:"%ci %cr" | head -1 | cut -d " " -f1)
@@ -13,11 +14,17 @@ function set_version() {
 function build_target() {
     platform=$1
     name=$2
-    rm -rf target/release/build && cross build --release --target $platform
+    # RUN in host test and build.rs
+    cargo build
+    if [[ "$platform" == *"linux-musl"* ]]; then
+        cross build --release --target $platform --features openssl -vv
+    else
+        cross build --release --target $platform -vv
+    fi
     [ -d "./dist" ] || mkdir -p dist
     cp target/$platform/release/$name ./dist/$platform.$name
-    cd ./dist && tar -czvf autossh.$platform.tar.gz $platform.$name && cd .. # && rm -rf $platform.$name
-    echo "[+] $RELEASE_VERSION build success, output file: dist/autossh.$platform.tar.gz"
+    cd ./dist && tar -czvf $PKG_NAME.$platform.tar.gz $platform.$name && cd .. # && rm -rf $platform.$name
+    echo "[+] $RELEASE_VERSION build success, output file: dist/$PKG_NAME.$platform.tar.gz"
 }
 
 function build() {
@@ -31,7 +38,7 @@ function build() {
 Select the target platform number:
 EOF
     )
-    name=autossh
+    name=$PKG_NAME
     read -p "$cross_info" number
     case $number in
     1)
@@ -48,7 +55,7 @@ EOF
         ;;
     5)
         platform=x86_64-pc-windows-gnu
-        name=autossh.exe
+        name=$PKG_NAME.exe
         ;;
     *)
         platform=x86_64-unknown-linux-gnu
@@ -69,9 +76,9 @@ function build_all() {
     )
     for target in ${targets[@]}; do
         if [[ $target == "x86_64-pc-windows-gnu" ]]; then
-            name=autossh.exe
+            name=$PKG_NAME.exe
         else
-            name=autossh
+            name=$PKG_NAME
         fi
         build_target $target $name
     done
