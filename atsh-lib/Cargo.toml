@@ -29,3 +29,5 @@ toml = "0.9.2"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+# cargo build --release --target x86_64-unknown-linux-musl --features openssl
+openssl = { version = "0.10.64", features = ["vendored"], optional = true}
