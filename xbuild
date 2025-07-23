@@ -1,21 +1,12 @@
 #! /bin/bash
-# set -ex
+set -euxo pipefail
 
 RELEASE_VERSION=${BUILD_VERSION:-0.1}
 PKG_NAME=atsh
 
-function set_version() {
-    date=$(git show --pretty=format:"%ci %cr" | head -1 | cut -d " " -f1)
-    commit=$(git rev-parse HEAD | cut -c1-10)
-    RELEASE_VERSION="$RELEASE_VERSION ($commit $date)"
-    sed -i "s|version = \".*\"|version = \"$RELEASE_VERSION\"|" ./src/main.rs
-}
-
 function build_target() {
     platform=$1
     name=$2
-    # RUN in host test and build.rs
-    cargo build
     if [[ "$platform" == *"x86_64-pc-windows"* ]]; then
         cross build --release --target $platform -vv
     else
@@ -84,7 +75,8 @@ function build_all() {
     done
 }
 
-set_version
+# RUN in host test and build.rs
+cargo build
 
 case $1 in
 "all")
