@@ -139,6 +139,11 @@ Select the target platform number:
 
 # Changelog
 
+## 0.4.1
+
+- 降级 edition 为 2021 以支持低版本
+- 更新 cross 编译工具链到最新版本
+
 ## 0.4.0
 
 - 优化和重构，将存储方式改为数据库
