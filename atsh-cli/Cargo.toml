@@ -1,6 +1,6 @@
 [package]
 name = "autossh"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 authors = ["idhyt3r@gmail.com"]
 license = "MIT"
@@ -14,6 +14,7 @@ categories = ["command-line-utilities"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-atsh-lib = "0.1.1"
+atsh-lib = "0.1.2"
+# atsh-lib = {path = "../atsh-lib" }
 clap = { version = "4.5.41", features = ["derive"] }
 tracing = "0.1.41"

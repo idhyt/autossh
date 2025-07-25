@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use tracing::error;
 
-use atsh_lib::atsh::{add, download, initialize, list, login, remove, upload};
+use atsh_lib::atsh::{add, download, initialize, login, pprint, remove, upload};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -74,7 +74,7 @@ enum Commands {
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = "0.4.1 (2025-07-22)",
+    version = "0.4.2 (non-release)",
     about = "The atsh(@shell/autossh) is a simple ssh login tool and allow to automatically login with an empty password",
     long_about = None
 )]
@@ -89,7 +89,7 @@ fn main() {
     // debug!(args = ?args); !!! don't do that, info leak
 
     let result = match &args.command {
-        Some(Commands::List { all }) => list(*all),
+        Some(Commands::List { all }) => pprint(*all),
         Some(Commands::Add {
             user,
             password,
@@ -98,17 +98,17 @@ fn main() {
             name,
             note,
         }) => match add(user, password, ip, *port, name, note) {
-            Ok(_) => list(false),
+            Ok(_) => pprint(false),
             Err(e) => Err(e),
         },
         Some(Commands::Remove { index }) => match remove(index) {
-            Ok(_) => list(false),
+            Ok(_) => pprint(false),
             Err(e) => Err(e),
         },
         Some(Commands::Login { index, auth }) => login(*index, *auth),
         Some(Commands::Upload { index, path }) => upload(*index, path),
         Some(Commands::Download { index, path }) => download(*index, path),
-        None => list(false),
+        None => pprint(false),
     };
 
     if let Err(e) = result {
