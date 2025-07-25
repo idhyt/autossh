@@ -1,3 +1,5 @@
+<img src="./cli.png" height="400" alt="demo">
+
 # Usage
 
 所有数据文件都保存在工具的同级目录，数据迁移时候整个目录拷贝即可

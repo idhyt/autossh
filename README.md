@@ -1,5 +1,3 @@
-<img src="./demo.png" height="600" alt="demo">
-
 # Usage
 
 所有数据文件都保存在工具的同级目录，数据迁移时候整个目录拷贝即可
@@ -16,6 +14,12 @@
     └── logs                         # log directory
         └── 2025-07-21.json
 ```
+
+命令行工具
+<img src="./atsh-cli/cli_macos.png" height="400" alt="demo">
+
+桌面应用(demo)
+<img src="./atsh-app/app.png" height="400" alt="demo">
 
 ## 免密登录
 
