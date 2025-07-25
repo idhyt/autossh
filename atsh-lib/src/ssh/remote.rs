@@ -3,7 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::{BufRead, BufReader};
 use std::io::{Error, ErrorKind};
 use std::process::{Command, Stdio};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use super::secure::{check_secure, decrypt, encrypt};
 use super::session::SSHSession;
@@ -177,21 +177,36 @@ impl Remotes {
         let remotes = db::query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
         Ok(Remotes(remotes))
     }
-    pub fn get(idx: usize) -> Result<Remote, Error> {
+    pub fn get(idx: usize) -> Result<Option<Remote>, Error> {
         let remote = {
             let conn = db::get_connection().lock();
             db::query_index(&conn, idx)
         }
         .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
 
-        if let Some(r) = remote {
-            Ok(r)
+        if remote.is_some() {
+            info!(index = idx, "susccess get remote");
         } else {
-            Err(Error::new(
-                ErrorKind::NotFound,
-                format!("Remote {} not found", idx),
-            ))
+            warn!(index = idx, "remote not found");
         }
+        Ok(remote)
+    }
+
+    pub fn try_get(idx: usize) -> Result<Remote, Error> {
+        let remote = Remotes::get(idx)?;
+        if remote.is_none() {
+            return Err(Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("index {} remote not found", idx),
+            ));
+        }
+        Ok(remote.unwrap())
+    }
+
+    pub fn get_all() -> Result<Remotes, Error> {
+        let remotes = Remotes::load()?;
+        info!("susccess get all remotes {}", remotes.0.len());
+        Ok(remotes)
     }
 
     pub fn add(
@@ -230,13 +245,7 @@ impl Remotes {
 
         for idx in index.iter() {
             debug!(index = idx, "delete");
-            // 查询是否存在
-            let find = {
-                let conn = db::get_connection().lock();
-                db::query_index(&conn, *idx)
-                    .map_err(|e| Error::new(std::io::ErrorKind::NotFound, e))?
-            };
-            if let Some(remote) = find {
+            if let Some(remote) = Remotes::get(*idx)? {
                 remote.delete()?;
                 n += 1;
             }
@@ -244,21 +253,17 @@ impl Remotes {
         Ok(n)
     }
 
-    pub fn list() -> Result<(), Error> {
-        let remotes = Remotes::load()?;
-        info!(all = false, "susccess list remotes {}", remotes.0.len());
-        remotes.pprint(false);
-        Ok(())
-    }
+    // pub fn list() -> Result<(), Error> {
+    //     Remotes::get_all()?.pprint(false);
+    //     Ok(())
+    // }
 
-    pub fn list_all() -> Result<(), Error> {
-        let remotes = Remotes::load()?;
-        info!(all = true, "susccess list remotes {}", remotes.0.len());
-        remotes.pprint(true);
-        Ok(())
-    }
+    // pub fn list_all() -> Result<(), Error> {
+    //     Remotes::get_all()?.pprint(true);
+    //     Ok(())
+    // }
 
-    fn pprint(&self, all: bool) {
+    pub fn pprint(&self, all: bool) {
         let mut table = Table::new();
         let mut titles = vec!["index", "name", "user", "ip", "port"];
         if all {
