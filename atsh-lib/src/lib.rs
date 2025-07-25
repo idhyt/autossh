@@ -78,13 +78,14 @@ fn setup_logging(work_dir: &Path) -> Result<(), Error> {
 }
 
 pub mod atsh {
-    use crate::{setup_logging, WORK_DIR};
     use std::io::{Error, ErrorKind};
     use std::path::Path;
     use tracing::debug;
 
-    pub use crate::ssh::remote::Remote;
     use crate::ssh::remote::Remotes;
+    use crate::{setup_logging, WORK_DIR};
+
+    pub use crate::ssh::{remote::Remote, secure::set_atshkey};
 
     type Result<T> = std::result::Result<T, Error>;
 

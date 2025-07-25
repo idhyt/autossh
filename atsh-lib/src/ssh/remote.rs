@@ -5,7 +5,7 @@ use std::io::{Error, ErrorKind};
 use std::process::{Command, Stdio};
 use tracing::{debug, info, warn};
 
-use super::secure::{check_secure, decrypt, encrypt};
+use super::secure::{decrypt, encrypt, get_atshkey};
 use super::session::SSHSession;
 use crate::config::CONFIG;
 use crate::db::{self, delete_index, get_connection, update_authorized};
@@ -217,7 +217,7 @@ impl Remotes {
         name: &Option<impl AsRef<str>>,
         note: &Option<impl AsRef<str>>,
     ) -> Result<usize, Error> {
-        check_secure()?;
+        get_atshkey()?;
         let remote = Remote {
             index: 0, // not used
             user: user.to_string(),
@@ -287,7 +287,7 @@ impl Remotes {
                 remote.port.to_string(),
             ];
             if all {
-                if let Ok(_) = check_secure() {
+                if let Ok(_) = get_atshkey() {
                     row.push(remote.password.clone());
                 } else {
                     row.push(format!(
