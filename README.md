@@ -16,10 +16,12 @@
 ```
 
 命令行工具
-<img src="./atsh-cli/cli_macos.png" height="400" alt="demo">
+
+<img src="./atsh-cli/cli_macos.png" height="400" width="600" alt="demo">
 
 桌面应用(demo)
-<img src="./atsh-app/app.png" height="400" alt="demo">
+
+<img src="./atsh-app/app.png" height="400" width="600" alt="demo">
 
 ## 免密登录
 
