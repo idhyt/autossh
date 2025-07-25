@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const VERSION: &str = "0.4.1";
+const VERSION: &str = "0.4.2";
 
 fn get_version() -> String {
     // 获取 commit hash 前10位
