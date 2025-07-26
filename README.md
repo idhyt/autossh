@@ -1,10 +1,10 @@
 # Usage
 
-所有数据文件都保存在工具的同级目录，数据迁移时候整个目录拷贝即可
+所有数据默认保存在 `$HOME/.atsh.d`，数据迁移时候整个目录拷贝即可
 
 ```bash
-╰─ tree ~/app/atsh/
-~/app/atsh/
+╰─ tree ~/.atsh.d
+~/.atsh.d
 ├── atsh                             # autossh.exe / atsh.exe in windows
 └── .atsh.d                          # atsh data
     ├── atsh.db                      # records database
@@ -145,6 +145,11 @@ Select the target platform number:
 
 # Changelog
 
+## 0.4.2
+
+- 更新部分依赖
+- 默认数据目录为 $HOME/.atsh.d
+
 ## 0.4.1
 
 - 降级 edition 为 2021 以支持低版本
@@ -160,9 +165,8 @@ Select the target platform number:
 使用 [tool.py](https://github.com/idhyt/autossh/blob/main/tool.py) 可将早期版本(<=0.3.2>)的数据迁移到数据库中，请执行以下命令：
 
 ```bash
-# 新工具所在的目录
-export ATSH_TOOL_DIR="/path/to/atsh/.atsh.d"
-python tool.py toml2db -i ~/.config/autossh/config.toml -o $ATSH_TOOL_DIR
+mkkdir -p ~/.atsh.d
+python tool.py toml2db -i ~/.config/autossh/config.toml -o ~/.atsh.d
 ```
 
 ## 0.3.1

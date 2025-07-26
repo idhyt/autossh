@@ -38,7 +38,10 @@ fn patch_file(file: &Path, key: &str, value: &str) {
 }
 
 fn main() {
-    println!("{:#?}", std::env::vars().collect::<std::collections::HashMap<_, _>>());
+    println!(
+        "{:#?}",
+        std::env::vars().collect::<std::collections::HashMap<_, _>>()
+    );
 
     // in cargo publish, do noting
     if std::env::var("CARGO_PKG_PUBLISHED").is_ok() {

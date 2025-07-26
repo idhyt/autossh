@@ -2,11 +2,11 @@
 
 # Usage
 
-所有数据文件都保存在工具的同级目录，数据迁移时候整个目录拷贝即可
+数据迁移时候整个目录拷贝即可
 
 ```bash
-╰─ tree ~/app/atsh/
-~/app/atsh/
+╰─ tree ~/.atsh.d
+~/.atsh.d
 ├── atsh                             # autossh.exe / atsh.exe in windows
 └── .atsh.d                          # atsh data
     ├── atsh.db                      # records database
