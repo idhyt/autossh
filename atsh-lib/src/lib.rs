@@ -1,4 +1,5 @@
-use std::io::Error;
+use std::env::{current_exe, home_dir};
+use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, OnceLock};
 
@@ -7,14 +8,38 @@ mod db;
 mod ssh;
 
 static WORK_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+fn get_work_dir() -> &'static PathBuf {
+    WORK_DIR.get().expect("WORK_DIR not initialized")
+}
+
+fn set_work_dir(w: Option<impl AsRef<Path>>) -> Result<(), Error> {
+    let work_dir = w
+        // user specified work_dir
+        .map(|d| d.as_ref().to_path_buf())
+        // $HOME/.atsh.d
+        .or_else(|| home_dir().map(|h| h.join(".atsh.d")))
+        // current executable directory
+        .or_else(|| current_exe().ok().map(|e| e.with_file_name(".atsh.d")))
+        // Error
+        .ok_or_else(|| Error::new(ErrorKind::NotFound, "work_dir not found"))?;
+
+    if !work_dir.exists() {
+        std::fs::create_dir_all(&work_dir)?;
+    }
+
+    WORK_DIR
+        .set(work_dir)
+        .expect("WORK_DIR already initialized");
+    Ok(())
+}
+
 pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|| {
     |n| {
+        let work_dir = get_work_dir();
         if cfg!(test) {
-            let work_dir =
-                std::env::current_exe().expect("failed to get current execute directory");
             work_dir.with_file_name("test.atsh.d")
         } else {
-            let work_dir = WORK_DIR.get().expect("WORK_DIR not initialized");
             work_dir.join(n)
         }
     }
@@ -83,32 +108,17 @@ pub mod atsh {
     use tracing::debug;
 
     use crate::ssh::remote::Remotes;
-    use crate::{setup_logging, WORK_DIR};
+    use crate::{get_work_dir, set_work_dir, setup_logging};
 
     pub use crate::ssh::{remote::Remote, secure::set_atshkey};
 
     type Result<T> = std::result::Result<T, Error>;
 
-    pub fn initialize(work_dir: Option<&Path>) -> Result<()> {
-        let work_dir = work_dir.map(|p| p.to_path_buf()).unwrap_or({
-            let work_dir =
-                std::env::current_exe().expect("failed to get current execute directory");
-            // work_dir.pop();
-            // work_dir
-            work_dir.with_file_name(".atsh.d")
-        });
-        debug!("work_dir: {}", work_dir.display());
-
-        if !work_dir.exists() {
-            std::fs::create_dir_all(&work_dir)?;
-        }
-        setup_logging(&work_dir)?;
-
-        WORK_DIR
-            .set(work_dir)
-            .expect("WORK_DIR already initialized");
-
-        // info!(work=?WORK_DIR.get(), "success initialize");
+    pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<()> {
+        set_work_dir(work_dir)?;
+        let w = get_work_dir();
+        setup_logging(w)?;
+        debug!("success initialize at {:?}", w);
         Ok(())
     }
 
@@ -171,6 +181,10 @@ pub mod atsh {
         remote.login(auth)
     }
 
+    #[deprecated(
+        since = "0.1.2",
+        note = "This function is not clearly expressed; use `upload/download` instead."
+    )]
     pub fn copy(index: usize, path: &str) -> Result<()> {
         let paths = path.split('=').collect::<Vec<&str>>();
         if paths.len() != 2 {
@@ -215,12 +229,35 @@ pub mod atsh {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
+#[cfg(test)]
+mod tests {
 
-//     use super::*;
+    use super::*;
 
-//     #[test]
-//     fn test_lib() {
-//     }
-// }
+    #[test]
+    fn test_work_dir_default() {
+        let w = set_work_dir(Option::<&str>::None);
+        assert!(w.is_ok());
+        let w = get_work_dir();
+        println!("default work dir: {:?}", w);
+        if let Some(h) = home_dir() {
+            assert_eq!(w.to_owned(), h.join(".atsh.d"));
+        } else {
+            if let Ok(e) = current_exe() {
+                assert_eq!(w.to_owned(), e.join(".atsh.d"));
+            } else {
+                assert!(false)
+            }
+        }
+    }
+
+    #[test]
+    fn test_work_dir() {
+        let sw = PathBuf::from("test");
+        let w = set_work_dir(Some(&sw));
+        assert!(w.is_ok());
+        let w = get_work_dir();
+        println!("set work dir: {:?}", w);
+        assert_eq!(w.to_owned(), sw);
+    }
+}
