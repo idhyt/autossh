@@ -1,5 +1,5 @@
-use home::home_dir;
 use serde::{Deserialize, Serialize};
+use std::env::home_dir;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
