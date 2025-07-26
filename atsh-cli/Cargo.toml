@@ -4,12 +4,16 @@ version = "0.4.2"
 edition = "2021"
 authors = ["idhyt3r@gmail.com"]
 license = "MIT"
-description = "atsh/autossh is used to ssh login and allow automatically login without password"
+description = "autossh/@shell tool is used to ssh login and allow automatically login without password"
 readme = "README.md"
-homepage = "https://github.com/idhyt/autossh"
-repository = "https://github.com/idhyt/autossh"
-keywords = ["ssh", "passwordless", "autossh", "atshell"]
-categories = ["command-line-utilities"]
+homepage = "https://github.com/idhyt/autossh/tree/main/atsh-cli"
+repository = "https://github.com/idhyt/autossh/tree/main/atsh-cli"
+keywords = ["atsh", "autossh", "atshell", "ssh", "passwordless"]
+categories = [
+    "network-programming",
+    "command-line-utilities",
+    "development-tools",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
