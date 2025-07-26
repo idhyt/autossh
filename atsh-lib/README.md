@@ -18,8 +18,10 @@ use atsh_lib::atsh::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // or initialize("/path/to/data/save").expect("initialize failed");
-    // default data path is /executable_dir/.atsh.d
+    // default data path
     initialize(None)?;
+    // set data to $home/.atsh.d
+    initialize(std::env::home_dir().map(|h| h.join(".atsh.d")))?;
     // get ATSH_KEY
     let key = get_atshkey()?;
     // set ATSH_KEY
@@ -51,4 +53,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     pprint(true)?;
     // do something...
 }
+```
+
+通过 `initialize` 可以指定数据存放目录，所有数据保存在同一目录下
+
+默认情况数据存放目录优先级: `$HOME/.atsh.d -> $current_exe_dir/.atsh.d -> Error`
+
+数据迁移时候整个目录拷贝即可
+
+```bash
+╰─ tree ~/.atsh.d
+~/.atsh.d
+├── atsh                             # autossh.exe / atsh.exe in windows
+└── .atsh.d                          # atsh data
+    ├── atsh.db                      # records database
+    ├── atsh_key                     # ssh private key
+    ├── atsh_key.pub                 # ssh public key
+    ├── config.toml                  # config file with little information
+    └── logs                         # log directory
+        └── 2025-07-21.json
 ```
