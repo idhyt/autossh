@@ -25,36 +25,43 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Self {
-        let config = if cfg!(test) {
-            WORK_DIR_FILE("test.config.toml")
-        } else {
-            WORK_DIR_FILE("config.toml")
-        };
+        let config = WORK_DIR_FILE("config.toml");
+        // if config file not exists, create it
         if !config.is_file() {
-            std::fs::write(&config, DEFAULT).expect("Failed to write config.toml");
-            warn!(
-                file = ?config,
-                "💡 The first run creates a default config"
+            let mut default: Config =
+                toml::from_str(DEFAULT).expect("Failed to parse default config");
+            if default.sshkey.is_none() {
+                let home = home_dir().expect("Failed to get home directory");
+                let (public, private) = (
+                    home.join(".ssh").join("id_rsa.pub"),
+                    home.join(".ssh").join("id_rsa"),
+                );
+                let msg = format!(
+                    r#"
+  🔹 No SSH key specified. Defaulting to: {:?}
+  🔹 SSH key used for remote host authentication.
+  🔹 To generate a new key (passphrase-free):
+        ssh-keygen -t rsa -b 2048 -C "atsh" -N "" -f {:?}"#,
+                    private,
+                    WORK_DIR_FILE("atsh_key")
+                );
+                warn!("💡 The first run to create a default config{}", msg);
+                default.sshkey = Some(SSHKey { public, private });
+            }
+            std::fs::write(
+                &config,
+                toml::to_string(&default).expect("Failed to serialize config"),
             )
+            .expect("Failed to write config.toml");
         }
+
         Self::load_from_file(config.as_path())
     }
 
     pub fn load_from_file(f: &Path) -> Self {
         debug!(file = ?f, "Loading config");
         let content = std::fs::read_to_string(f).expect("Failed to read config.toml");
-        let mut config: Config = toml::from_str(&content).expect("Failed to parse config.toml");
-        if config.sshkey.is_none() {
-            let home = home_dir().unwrap();
-            config.sshkey = Some(SSHKey {
-                public: home.join(".ssh").join("id_rsa.pub"),
-                private: home.join(".ssh").join("id_rsa"),
-            });
-            warn!(
-                "💡 No sshkey specified, using default at {:?}/.ssh/id_rsa",
-                home
-            );
-        }
+        let config: Config = toml::from_str(&content).expect("Failed to parse config.toml");
         config
     }
 
@@ -85,6 +92,9 @@ mod tests {
 
     #[test]
     fn test_config() {
+        use crate::set_work_dir;
+
+        set_work_dir(Some("test.atsh.d")).unwrap();
         let config = &CONFIG;
         println!("config: {:#?}", config.sshkey);
         assert!(config.sshkey.is_some());

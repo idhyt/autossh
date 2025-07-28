@@ -36,12 +36,8 @@ fn set_work_dir(w: Option<impl AsRef<Path>>) -> Result<(), Error> {
 
 pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|| {
     |n| {
-        let work_dir = get_work_dir();
-        if cfg!(test) {
-            work_dir.with_file_name("test.atsh.d")
-        } else {
-            work_dir.join(n)
-        }
+        let w = get_work_dir();
+        w.join(n)
     }
 });
 

@@ -1,25 +1,17 @@
 use parking_lot::Mutex;
-use rusqlite::{Connection, Result, params};
+use rusqlite::{params, Connection, Result};
 use std::path::Path;
 use std::sync::OnceLock;
 use tracing::{debug, warn};
 
-use crate::WORK_DIR_FILE;
 use crate::ssh::remote::Remote;
 use crate::ssh::secure::{decrypt, encrypt};
+use crate::WORK_DIR_FILE;
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 pub fn get_connection() -> &'static Mutex<Connection> {
-    DATABASE.get_or_init(|| {
-        let path = if cfg!(test) {
-            WORK_DIR_FILE("test.atsh.db")
-        } else {
-            WORK_DIR_FILE("atsh.db")
-        };
-
-        Mutex::new(db_init(&path).unwrap())
-    })
+    DATABASE.get_or_init(|| Mutex::new(db_init(&WORK_DIR_FILE("atsh.db")).unwrap()))
 }
 
 fn db_init(p: &Path) -> Result<Connection> {
@@ -127,6 +119,10 @@ mod tests {
 
     #[test]
     fn test_db() {
+        use crate::set_work_dir;
+        set_work_dir(Some("test.atsh.d")).unwrap();
+        let db_path = WORK_DIR_FILE("atsh.db");
+
         let remote = Remote {
             index: 1,
             user: "user".to_string(),
@@ -138,10 +134,10 @@ mod tests {
             note: None,
         };
         // init
-        crate::atsh::initialize(Some(Path::new("."))).unwrap();
+        // crate::atsh::initialize(Option::<&str>::None).unwrap();
         // unsafe {std::env::set_var("ASKEY", "test");}
         // let enc_pwd = "HlT+Q0TYYpCrZNKfwM+Kg3VU3rE5hJ9jtohcGG0nU7qq2UOq";
-        let db_path = WORK_DIR_FILE("test.atsh.db");
+        // let db_path = WORK_DIR_FILE("atsh.db");
 
         // clean
         {
