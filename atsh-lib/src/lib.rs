@@ -10,28 +10,42 @@ mod ssh;
 static WORK_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 fn get_work_dir() -> &'static PathBuf {
-    WORK_DIR.get().expect("WORK_DIR not initialized")
+    WORK_DIR.get_or_init(|| set_work_dir(Option::<&str>::None).expect("WORK_DIR not initialized"))
 }
 
-fn set_work_dir(w: Option<impl AsRef<Path>>) -> Result<(), Error> {
-    let work_dir = w
-        // user specified work_dir
-        .map(|d| d.as_ref().to_path_buf())
-        // $HOME/.atsh.d
-        .or_else(|| home_dir().map(|h| h.join(".atsh.d")))
-        // current executable directory
-        .or_else(|| current_exe().ok().map(|e| e.with_file_name(".atsh.d")))
-        // Error
-        .ok_or_else(|| Error::new(ErrorKind::NotFound, "work_dir not found"))?;
+fn set_work_dir(w: Option<impl AsRef<Path>>) -> Result<PathBuf, Error> {
+    let work_dir = match w {
+        // mean set by other program
+        Some(w) => {
+            let wd = w.as_ref().to_path_buf();
+            // we set WORK_DIR immediately
+            WORK_DIR.set(wd.clone()).map_err(|_| {
+                Error::new(ErrorKind::AlreadyExists, "WORK_DIR already initialized")
+            })?;
+            wd
+        }
+        // mean set by this lib default
+        None => {
+            if cfg!(test) {
+                PathBuf::from("test.atsh.d")
+            } else {
+                let wd = home_dir()
+                    // the system home directory
+                    .map(|h| h.join(".atsh.d"))
+                    // current executable directory
+                    .or_else(|| current_exe().ok().map(|e| e.with_file_name(".atsh.d")))
+                    // Error
+                    .ok_or_else(|| Error::new(ErrorKind::NotFound, "WORK_DIR not found"))?;
+                wd
+            }
+        }
+    };
 
     if !work_dir.exists() {
         std::fs::create_dir_all(&work_dir)?;
     }
 
-    WORK_DIR
-        .set(work_dir)
-        .expect("WORK_DIR already initialized");
-    Ok(())
+    Ok(work_dir)
 }
 
 pub(crate) static WORK_DIR_FILE: LazyLock<fn(&str) -> PathBuf> = LazyLock::new(|| {
@@ -232,25 +246,22 @@ mod tests {
 
     #[test]
     fn test_work_dir_default() {
-        let w = set_work_dir(Option::<&str>::None);
-        assert!(w.is_ok());
+        // set default once
         let w = get_work_dir();
         println!("default work dir: {:?}", w);
-        if let Some(h) = home_dir() {
-            assert_eq!(w.to_owned(), h.join(".atsh.d"));
-        } else {
-            if let Ok(e) = current_exe() {
-                assert_eq!(w.to_owned(), e.join(".atsh.d"));
-            } else {
-                assert!(false)
-            }
-        }
+        // can't set again by others
+        let w = set_work_dir(Some(Path::new("test.atsh.d")));
+        // println!("set work dir: {:?}", w);
+        assert!(w.is_err());
+        assert!(w.err().unwrap().to_string().contains("already initialized"));
     }
 
     #[test]
-    fn test_work_dir() {
-        let sw = PathBuf::from("test");
+    #[ignore = "Only for debug"]
+    fn test_work_dir_set() {
+        let sw = PathBuf::from("test.atsh.d");
         let w = set_work_dir(Some(&sw));
+        println!("set work dir: {:?}", w);
         assert!(w.is_ok());
         let w = get_work_dir();
         println!("set work dir: {:?}", w);

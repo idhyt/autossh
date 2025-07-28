@@ -167,6 +167,8 @@ mod tests {
 
     #[test]
     fn test_key() {
+        let s = set_atshkey(Option::<&str>::None);
+        assert!(s.is_ok());
         let key = get_atshkey();
         assert!(key.is_err());
         let s = set_atshkey(Some("abcdefg"));

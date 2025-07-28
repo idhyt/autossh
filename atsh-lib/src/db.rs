@@ -119,8 +119,6 @@ mod tests {
 
     #[test]
     fn test_db() {
-        use crate::set_work_dir;
-        set_work_dir(Some("test.atsh.d")).unwrap();
         let db_path = WORK_DIR_FILE("atsh.db");
 
         let remote = Remote {

@@ -92,9 +92,6 @@ mod tests {
 
     #[test]
     fn test_config() {
-        use crate::set_work_dir;
-
-        set_work_dir(Some("test.atsh.d")).unwrap();
         let config = &CONFIG;
         println!("config: {:#?}", config.sshkey);
         assert!(config.sshkey.is_some());
