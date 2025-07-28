@@ -115,5 +115,5 @@ fn main() {
         error!(error=?e, "Run command failed");
         std::process::exit(1);
     }
-    std::process::exit(1);
+    std::process::exit(0);
 }
