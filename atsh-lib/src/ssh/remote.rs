@@ -69,7 +69,7 @@ impl Remote {
         Ok(())
     }
 
-    fn authenticate(&self) -> Result<(), Error> {
+    pub fn authenticate(&self) -> Result<(), Error> {
         // 认证
         let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
         session.authenticate()?;

@@ -120,6 +120,7 @@ pub mod atsh {
     use crate::ssh::remote::Remotes;
     use crate::{get_work_dir, set_work_dir, setup_logging};
 
+    pub use crate::config::CONFIG;
     pub use crate::ssh::{remote::Remote, secure::set_atshkey};
 
     type Result<T> = std::result::Result<T, Error>;
