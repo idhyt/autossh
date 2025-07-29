@@ -58,8 +58,10 @@ impl Remote {
     // 确保先从数据库查询
     pub fn delete(&self) -> Result<(), Error> {
         // 删除认证
-        let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
-        session.revoke()?;
+        if self.authorized {
+            let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
+            session.revoke()?;
+        }
         // 删除数据库
         let conn = get_connection().lock();
         delete_index(&conn, self.index).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
