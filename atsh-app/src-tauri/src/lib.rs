@@ -16,7 +16,7 @@ pub fn run() {
             list_servers,
             add_server,
             delete_server,
-            login_to_server
+            login_server
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

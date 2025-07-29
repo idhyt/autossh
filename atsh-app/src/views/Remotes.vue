@@ -131,7 +131,7 @@ const atshKeyToggleLock = () => {
 
 
 const currentPage = ref(1)
-const pageSize = ref(5)
+const pageSize = ref(7)
 const total = ref(0)
 
 const allServers = ref<Server[]>([])
@@ -264,7 +264,7 @@ async function deleteServer(index: number) {
 // 登录服务器
 async function loginServer(server: Server) {
   try {
-    await invoke('login_to_server', {
+    await invoke('login_server', {
       index: server.index
     })
     ElMessage.success(`正在登录 ${server.user}@${server.ip}:${server.port}`)
