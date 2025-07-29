@@ -23,7 +23,7 @@
     </el-row>
 
     <!-- 服务器列表 -->
-    <el-table :data="pagedServers" style="width: 100%" border>
+    <el-table :data="pagedServers" style="width: 100%" border size="small">
       <el-table-column prop="index" label="序号" width="60" />
       <el-table-column prop="name" label="名称" />
       <el-table-column prop="user" label="用户" />
@@ -40,12 +40,14 @@
         </template>
       </el-table-column>
       <el-table-column prop="note" label="备注" />
-      <el-table-column label="操作" fixed="right" width="160">
+      <el-table-column label="操作" fixed="right" width="100">
         <template #default="scope">
-          <el-button size="small" type="primary" @click="loginServer(scope.row)">登录</el-button>
-          <el-button size="small" type="danger" @click="deleteServer(scope.row.index)">
-            删除
-          </el-button>
+          <!-- <el-button size="small" type="primary" @click="loginServer(scope.row)">登录</el-button> -->
+          <!-- <el-button size="small" type="danger" :text="true" :icon="Delete" @click="deleteServer(scope.row.index)"> 删除 -->
+          <el-space :size="6">
+            <el-button size="small" type="primary" :icon="Connection" @click="loginServer(scope.row)"></el-button>
+            <el-button size="small" type="danger" :icon="Delete" @click="deleteServer(scope.row.index)"></el-button>
+          </el-space>
         </template>
       </el-table-column>
     </el-table>
@@ -53,7 +55,8 @@
     <!-- 分页 -->
     <div style="margin-top: 20px; text-align: right">
       <el-pagination @current-change="handleCurrentChange" :current-page="currentPage" :page-size="pageSize"
-        @size-change="handleSizeChange" layout="prev, pager, next, sizes, total" :total="total" />
+        :page-sizes="[10, 20, 50, 100]" @size-change="handleSizeChange" layout="prev, pager, next, sizes, total"
+        :total="total" />
     </div>
 
     <!-- 新增服务器 -->
@@ -96,6 +99,7 @@
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Connection } from '@element-plus/icons-vue'
 
 // =======================
 // 🔹 类型定义
@@ -172,8 +176,8 @@ const handleSizeChange = (val: number) => {
 
 // 添加 ATSH_KEY 环境变量
 async function setAtshKey(isLocked: Boolean, key: string) {
-  console.log('isLocked: ' + isLocked)
-  console.log('key: ' + key)
+  // console.log('isLocked: ' + isLocked)
+  // console.log('key: ' + key)
   try {
     if (isLocked) {
       // 加入环境变量
@@ -199,7 +203,7 @@ async function loadServers() {
     allServers.value = data
     total.value = data.length
   } catch (err) {
-    console.error(err)
+    // console.error(err)
     ElMessage.error('加载失败: ' + (err as Error).message)
   }
 }
@@ -239,12 +243,21 @@ async function deleteServer(index: number) {
   try {
     await ElMessageBox.confirm(`确定删除序号为 ${index} 的服务器？`, '警告', {
       type: 'warning',
+      distinguishCancelAndClose: true,
+      cancelButtonText: '取消',
+      confirmButtonText: '确认'
     })
-    await invoke('delete_server', { index })
-    ElMessage.success('删除成功')
+    await invoke('delete_server', { index: index })
+    ElMessage.success(`序号 ${index} 的服务器删除成功`)
     loadServers()
   } catch (err) {
-    if ((err as Error).message !== 'canceled') ElMessage.error('删除失败')
+    if (err === 'cancel') {
+      // 用户点击了取消按钮
+      ElMessage.info('已取消删除操作')
+    } else {
+      // 其他错误（删除失败）
+      ElMessage.error(`序号 ${index} 的服务器删除失败: ${err}`)
+    }
   }
 }
 

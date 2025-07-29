@@ -1,4 +1,4 @@
-use atsh_lib::atsh::{add, get_all, set_atshkey as _set_atshkey};
+use atsh_lib::atsh::{add, get_all, remove, set_atshkey as _set_atshkey};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -65,7 +65,12 @@ pub fn list_servers() -> CmdResult<Vec<Server>> {
 
 #[tauri::command]
 pub fn delete_server(index: usize) -> CmdResult<()> {
-    println!("删除服务器 index: {}", index);
+    if let Err(e) = remove(&vec![index]) {
+        return Err(ErrorResponse {
+            code: 10004,
+            message: e.to_string(),
+        });
+    }
     Ok(())
 }
 
