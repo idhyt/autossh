@@ -5,10 +5,12 @@ use std::io::{Error, ErrorKind};
 use std::process::{Command, Stdio};
 use tracing::{debug, info, warn};
 
-use super::secure::{decrypt, encrypt, get_atshkey};
-use super::session::SSHSession;
-use crate::config::CONFIG;
-use crate::db::{delete_index, get_connection, insert, query_all, query_index, update_authorized};
+use super::ssh::SSHSession;
+use crate::config::{get_atshkey, CONFIG};
+use crate::storage::db::{
+    delete_index, get_connection, insert, query_all, query_index, update_authorized,
+};
+use crate::storage::secure::{decrypt, encrypt};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -103,7 +105,7 @@ impl Remote {
             self.add_auth()?;
         }
 
-        let sshkey = CONFIG.get_private_key();
+        let sshkey = CONFIG.get_private();
         Command::new("ssh")
             .arg(format!("{}@{}", self.user, self.ip))
             .arg("-p")
@@ -153,7 +155,7 @@ impl Remote {
             "-P",
             &port,
             "-i",
-            CONFIG.get_private_key().to_str().unwrap(),
+            CONFIG.get_private().to_str().unwrap(),
             from,
             &remote,
         ];
@@ -172,7 +174,7 @@ impl Remote {
             "-P",
             &port,
             "-i",
-            CONFIG.get_private_key().to_str().unwrap(),
+            CONFIG.get_private().to_str().unwrap(),
             &remote,
             to,
         ];

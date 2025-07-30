@@ -22,7 +22,7 @@ impl SSHSession {
     }
     pub fn authenticate(&self) -> Result<(), Error> {
         // check public key exist in $HOME/.ssh/id_rsa.pub
-        let pub_key = CONFIG.read_public_key()?;
+        let pub_key = CONFIG.read_public()?;
         // get remote server home dir
         let remote_home = self.read_exec("echo $HOME")?;
         debug!("remote home: {}", remote_home);
@@ -53,7 +53,7 @@ impl SSHSession {
     }
 
     pub fn revoke(&self) -> Result<(), Error> {
-        let public_key = CONFIG.read_public_key()?;
+        let public_key = CONFIG.read_public()?;
         let remote_home = self.read_exec("echo $HOME")?;
         debug!("remote home: {}", remote_home);
         let remote_key = format!("{}/.ssh/authorized_keys", remote_home);

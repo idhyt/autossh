@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::OnceLock;
 use tracing::{debug, warn};
 
-use crate::ssh::remote::Remote;
-use crate::ssh::secure::{decrypt, encrypt};
-use crate::WORK_DIR_FILE;
+use super::secure::{decrypt, encrypt};
+use crate::config::WORK_DIR_FILE;
+use crate::connection::remote::Remote;
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
