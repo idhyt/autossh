@@ -5,13 +5,13 @@ use std::sync::OnceLock;
 use tracing::{debug, warn};
 
 use super::secure::{decrypt, encrypt};
-use crate::config::WORK_DIR_FILE;
+use crate::config::CONFIG;
 use crate::connection::remote::Remote;
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 pub fn get_connection() -> &'static Mutex<Connection> {
-    DATABASE.get_or_init(|| Mutex::new(db_init(&WORK_DIR_FILE("atsh.db")).unwrap()))
+    DATABASE.get_or_init(|| Mutex::new(db_init(&CONFIG.work_dir_file("atsh.db")).unwrap()))
 }
 
 fn db_init(p: &Path) -> Result<Connection> {
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_db() {
-        let db_path = WORK_DIR_FILE("atsh.db");
+        let db_path = CONFIG.work_dir_file("atsh.db");
 
         let remote = Remote {
             index: 1,

@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use tracing::{debug, info, warn};
 
 use super::ssh::SSHSession;
-use crate::config::{get_atshkey, CONFIG};
+use crate::config::CONFIG;
 use crate::storage::db::{
     delete_index, get_connection, insert, query_all, query_index, update_authorized,
 };
@@ -59,7 +59,7 @@ impl std::fmt::Display for Remote {
 impl Remote {
     pub fn add_record(&self) -> Result<usize, Error> {
         // Force check the ATSH_KEY exist or not
-        get_atshkey()?;
+        CONFIG.get_enc_key()?;
         let n = {
             let conn = get_connection().lock();
             insert(&conn, &self)
@@ -293,7 +293,7 @@ impl Remotes {
                 remote.port.to_string(),
             ];
             if all {
-                if let Ok(_) = get_atshkey() {
+                if let Ok(_) = CONFIG.get_enc_key() {
                     row.push(remote.password.clone());
                 } else {
                     row.push(format!(

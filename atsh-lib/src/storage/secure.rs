@@ -4,7 +4,7 @@ use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use chacha20poly1305::ChaCha20Poly1305;
 
-use crate::config::get_atshkey;
+use crate::config::CONFIG;
 
 fn generate_key(key: Option<impl AsRef<str>>) -> Vec<u8> {
     if key.is_none() {
@@ -48,7 +48,7 @@ fn chacha_decrypt(obsf: &[u8], key: &[u8]) -> String {
 
 pub fn encrypt(data: impl AsRef<str>) -> String {
     let data = data.as_ref();
-    if let Ok(key) = get_atshkey() {
+    if let Ok(key) = CONFIG.get_enc_key() {
         // log::debug!("we found `ASKEY` and will encrypt.");
         let key = generate_key(Some(&key));
         let obsf = chacha_encrypt(data, &key);
@@ -60,7 +60,7 @@ pub fn encrypt(data: impl AsRef<str>) -> String {
 
 pub fn decrypt(data: impl AsRef<str>) -> String {
     let data = data.as_ref();
-    if let Ok(key) = get_atshkey() {
+    if let Ok(key) = CONFIG.get_enc_key() {
         // log::debug!("we found `ASKEY` and will decrypt.");
         let obsf = general_purpose::STANDARD_NO_PAD
             .decode(data.as_bytes())
