@@ -8,7 +8,7 @@ use tracing::{debug, info, warn};
 use super::secure::{decrypt, encrypt, get_atshkey};
 use super::session::SSHSession;
 use crate::config::CONFIG;
-use crate::db::{self, delete_index, get_connection, update_authorized};
+use crate::db::{delete_index, get_connection, insert, query_all, query_index, update_authorized};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Remote {
@@ -55,22 +55,27 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
-    // 确保先从数据库查询
-    pub fn delete(&self) -> Result<(), Error> {
-        // 删除认证
-        if self.authorized {
-            let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
-            session.revoke()?;
+    pub fn add_record(&self) -> Result<usize, Error> {
+        // Force check the ATSH_KEY exist or not
+        get_atshkey()?;
+        let n = {
+            let conn = get_connection().lock();
+            insert(&conn, &self)
         }
+        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        info!(remote = self.to_string(), "success add record");
+        Ok(n)
+    }
+
+    pub fn delete_record(&self) -> Result<(), Error> {
         // 删除数据库
         let conn = get_connection().lock();
         delete_index(&conn, self.index).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
-        info!(remote = self.to_string(), "success delete");
+        info!(remote = self.to_string(), "success delete record");
         Ok(())
     }
 
-    pub fn authenticate(&self) -> Result<(), Error> {
-        // 认证
+    pub fn add_auth(&self) -> Result<(), Error> {
         let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
         session.authenticate()?;
         // 更新数据库
@@ -81,14 +86,21 @@ impl Remote {
             update_authorized(&conn, self.index, true)
                 .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
         }
-        info!(remote = self.to_string(), "success authenticate");
+        info!(remote = self.to_string(), "success add authenticate");
+        Ok(())
+    }
+
+    pub fn remove_auth(&self) -> Result<(), Error> {
+        let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
+        session.revoke()?;
+        info!(remote = self.to_string(), "success remove authenticate");
         Ok(())
     }
 
     pub fn login(&self, reauth: bool) -> Result<(), Error> {
         // 如果没有认证，或者通过 `--auth` 参数重新认证
         if !self.authorized || reauth {
-            self.authenticate()?;
+            self.add_auth()?;
         }
 
         let sshkey = CONFIG.get_private_key();
@@ -107,7 +119,7 @@ impl Remote {
         // 如果没有认证，则先认证
         if !self.authorized {
             debug!(remote = self.to_string(), "no authorized, try authenticate");
-            self.authenticate()?;
+            self.add_auth()?;
         }
         // info!("\n🚨 scp {}\n🚨 input `y` to run and other to cancel.", cmd);
         // let mut read = String::new();
@@ -175,14 +187,14 @@ pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {
     fn load() -> Result<Remotes, Error> {
-        let conn = db::get_connection().lock();
-        let remotes = db::query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        let conn = get_connection().lock();
+        let remotes = query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
         Ok(Remotes(remotes))
     }
     pub fn get(idx: usize) -> Result<Option<Remote>, Error> {
         let remote = {
-            let conn = db::get_connection().lock();
-            db::query_index(&conn, idx)
+            let conn = get_connection().lock();
+            query_index(&conn, idx)
         }
         .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -219,7 +231,6 @@ impl Remotes {
         name: &Option<impl AsRef<str>>,
         note: &Option<impl AsRef<str>>,
     ) -> Result<usize, Error> {
-        get_atshkey()?;
         let remote = Remote {
             index: 0, // not used
             user: user.to_string(),
@@ -233,37 +244,28 @@ impl Remotes {
         // we not authorized the remote server until the first login
         // remote.authorized();
         // debug!(remote = remote.to_string(), "add");
-        let n = {
-            let conn = db::get_connection().lock();
-            db::insert(&conn, &remote)
-        }
-        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
-        info!(remote = remote.to_string(), "add remote success");
-        Ok(n)
+        remote.add_record()
     }
 
-    pub fn delete(index: &Vec<usize>) -> Result<usize, Error> {
-        let mut n = 0;
-
-        for idx in index.iter() {
-            debug!(index = idx, "delete");
-            if let Some(remote) = Remotes::get(*idx)? {
-                remote.delete()?;
-                n += 1;
+    pub fn delete(indexs: &Vec<usize>) -> Result<usize, Error> {
+        let remotes: Vec<Remote> = indexs
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .iter()
+            .filter_map(|&idx| Remotes::get(*idx).transpose())
+            .collect::<Result<Vec<_>, _>>()?;
+        debug!(total = remotes.len(), "delete");
+        for remote in remotes.iter() {
+            debug!(index = remote.index, "delete");
+            // remove auth
+            if remote.authorized {
+                remote.remove_auth()?;
             }
+            // delete database
+            remote.delete_record()?;
         }
-        Ok(n)
+        Ok(remotes.len())
     }
-
-    // pub fn list() -> Result<(), Error> {
-    //     Remotes::get_all()?.pprint(false);
-    //     Ok(())
-    // }
-
-    // pub fn list_all() -> Result<(), Error> {
-    //     Remotes::get_all()?.pprint(true);
-    //     Ok(())
-    // }
 
     pub fn pprint(&self, all: bool) {
         let mut table = Table::new();
