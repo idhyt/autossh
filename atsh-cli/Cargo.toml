@@ -1,6 +1,6 @@
 [package]
 name = "atsh"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 authors = ["idhyt3r@gmail.com"]
 license = "MIT"
@@ -18,7 +18,7 @@ categories = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-atsh-lib = "0.1.4"
+atsh-lib = "0.1.5"
 # atsh-lib = {path = "../atsh-lib" }
 clap = { version = "4.5.41", features = ["derive"] }
 tracing = "0.1.41"
