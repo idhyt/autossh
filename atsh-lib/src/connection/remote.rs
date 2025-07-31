@@ -78,6 +78,9 @@ impl Remote {
     }
 
     pub fn add_auth(&self) -> Result<(), Error> {
+        // check the `ATSH_KEY` exist or not
+        // if not exist, { kind: Other, error: "Authentication failed (username/password)" }
+        let _ = CONFIG.get_enc_key()?;
         let session = SSHSession::new(&self.user, &self.password, &self.ip, self.port)?;
         session.authenticate()?;
         // 更新数据库
