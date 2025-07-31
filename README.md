@@ -8,8 +8,8 @@
 ├── atsh                             # autossh.exe / atsh.exe in windows
 └── .atsh.d                          # atsh data
     ├── atsh.db                      # records database
-    ├── atsh_key                     # ssh private key
-    ├── atsh_key.pub                 # ssh public key
+    ├── id_rsa                       # ssh private key
+    ├── id_rsa.pub                   # ssh public key
     ├── config.toml                  # config file with little information
     └── logs                         # log directory
         └── 2025-07-21.json
@@ -25,25 +25,26 @@
 
 ## 免密登录
 
-默认情况下，会使用 `$HOME/.ssh/id_rsa` 作为登录密钥，如果该密钥设置的密码，登录时需要输入该密钥设置的密码，推荐该方式。
-
-可按照如下操作使用无密码登录:
-
-step1. 生成无密码登录的密钥
-
-```bash
-ssh-keygen -t rsa -b 2048 -C "atsh" -N "" ./atsh_key
-```
-
-step2. 将密钥路径写入配置文件 `config.toml`
+如果想指定登录密钥，将密钥路径写入配置文件 `config.toml` 即可
 
 ```toml
 [sshkey]
-private = "/path/to/atsh_key"
-public = "/path/to/atsh_key.pub"
+private = "/home/to/.ssh/id_rsa"
+public = "/home/to/.ssh/id_rsa.pub"
 ```
 
-后续登录就不会需要密码了，但请妥善保护好你的私钥文件！
+可按照如下操作使用无密码登录:
+
+```bash
+> atsh ssh-keygen
+INFO 🔑 Starting generating rsa key pair...
+Generating public/private rsa key pair.
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+...
+```
+
+输入密码为空(回车)即可，但请妥善保护好你的私钥文件！
 
 ## 命令
 
@@ -144,6 +145,11 @@ Select the target platform number:
 ```
 
 # Changelog
+
+## 0.4.3
+
+- 通过 `ssh-keygen` 生成密钥对
+- 优化和重构部分实现
 
 ## 0.4.2
 
