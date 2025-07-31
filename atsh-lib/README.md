@@ -72,6 +72,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     pprint(false)?;
     // pretty print with all info
     pprint(true)?;
+    // create a new ssh key pair
+    CONFIG.create_sshkey(
+        Option::<&str>::None,
+        Option::<&std::path::Path>::None,
+        true)?;
     // do something...
     Ok(())
 }
@@ -89,8 +94,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ├── atsh                             # autossh.exe / atsh.exe in windows
 └── .atsh.d                          # atsh data
     ├── atsh.db                      # records database
-    ├── atsh_key                     # ssh private key
-    ├── atsh_key.pub                 # ssh public key
+    ├── id_rsa                       # ssh private key
+    ├── id_rsa.pub                   # ssh public key
     ├── config.toml                  # config file with little information
     └── logs                         # log directory
         └── 2025-07-21.json
