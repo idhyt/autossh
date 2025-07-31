@@ -1,7 +1,8 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 use tracing::error;
 
-use atsh_lib::atsh::{add, download, initialize, login, pprint, remove, upload};
+use atsh_lib::atsh::{add, download, initialize, login, pprint, remove, upload, CONFIG};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -69,6 +70,22 @@ enum Commands {
         #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
         path: Vec<String>,
     },
+    /// Create a new ssh key pair to used for authentication.
+    // #[clap(aliases = &["ssh-keygen"])]
+    SshKeygen {
+        /// Optional password for the private key.
+        /// Do not specified if you want to login without password
+        #[arg(short, long)]
+        password: Option<String>,
+        /// Optional output file path for the private key.
+        /// Default is this program's work directory.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Optional interactive mode or not.
+        /// Default is in interactive and call the `ssh-keygen` interactively
+        #[arg(short, long, default_value = "false")]
+        silent: bool,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -108,6 +125,13 @@ fn main() {
         Some(Commands::Login { index, auth }) => login(*index, *auth),
         Some(Commands::Upload { index, path }) => upload(*index, path),
         Some(Commands::Download { index, path }) => download(*index, path),
+        Some(Commands::SshKeygen {
+            password,
+            output,
+            silent,
+        }) => CONFIG
+            .create_sshkey(password.as_deref(), output.as_deref(), !*silent)
+            .map(|_| ()),
         None => pprint(false),
     };
 
