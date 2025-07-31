@@ -67,10 +67,11 @@ impl Config {
     }
 
     /// set work directory
-    pub fn set_work_dir(&self, dir: Option<impl AsRef<Path>>) -> Result<PathBuf, Error> {
+    pub fn set_work_dir(&self, dir: impl AsRef<Path>) -> Result<(), Error> {
         set_work_dir(dir)
     }
 
+    /// generate work directory file path
     pub fn work_dir_file(&self, n: &str) -> PathBuf {
         WORK_DIR_FILE(n)
     }

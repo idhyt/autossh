@@ -12,7 +12,7 @@ use crate::storage::db::{
 };
 use crate::storage::secure::{decrypt, encrypt};
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Remote {
     /// the index of the remote server.
     // #[serde(rename = "idx")]
@@ -184,7 +184,7 @@ impl Remote {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+// #[derive(Serialize, Deserialize)]
 pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {

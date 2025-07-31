@@ -7,16 +7,19 @@ pub mod atsh {
     use std::path::Path;
     use tracing::debug;
 
-    use crate::connection::remote::Remotes;
+    use crate::connection::Remotes;
     use crate::storage::log::setup_logging;
-
-    pub use crate::config::CONFIG;
-    pub use crate::connection::remote::Remote;
 
     type Result<T> = std::result::Result<T, Error>;
 
+    // export the objects to the outside
+    pub use crate::config::CONFIG;
+    pub use crate::connection::Remote;
+
     pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<()> {
-        CONFIG.set_work_dir(work_dir)?;
+        if let Some(p) = work_dir {
+            CONFIG.set_work_dir(p)?;
+        }
         let w = CONFIG.get_work_dir();
         setup_logging(w)?;
         debug!("success initialize at {:?}", w);

@@ -6,7 +6,7 @@ use tracing::{debug, warn};
 
 use super::secure::{decrypt, encrypt};
 use crate::config::CONFIG;
-use crate::connection::remote::Remote;
+use crate::connection::Remote;
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
