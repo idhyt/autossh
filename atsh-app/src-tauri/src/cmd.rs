@@ -1,13 +1,13 @@
 use std::process::Command;
 
-use atsh_lib::atsh::{add, get_all, remove, set_atshkey as _set_atshkey, try_get, Remote, CONFIG};
+use atsh_lib::atsh::{add, get_all, remove, try_get, Remote, CONFIG};
 use serde::{Deserialize, Serialize};
 
 type CmdResult<T> = Result<T, ErrorResponse>;
 
 #[tauri::command]
 pub fn set_atshkey(key: Option<String>) -> CmdResult<()> {
-    if let Err(e) = _set_atshkey(key) {
+    if let Err(e) = CONFIG.set_enc_key(key) {
         return Err(ErrorResponse {
             code: 10001,
             message: e.to_string(),
@@ -63,12 +63,37 @@ pub fn list_servers() -> CmdResult<Vec<Server>> {
 
 #[tauri::command]
 pub fn delete_server(index: usize) -> CmdResult<()> {
-    if let Err(e) = remove(&vec![index]) {
+    // if let Err(e) = remove(&vec![index]) {
+    //     return Err(ErrorResponse {
+    //         code: 10004,
+    //         message: e.to_string(),
+    //     });
+    // }
+    let remote = try_get(index);
+    if let Err(e) = remote {
         return Err(ErrorResponse {
             code: 10004,
             message: e.to_string(),
         });
     }
+    let remote = remote.unwrap();
+
+    if let Err(e) = remote.delete_record() {
+        return Err(ErrorResponse {
+            code: 10004,
+            message: format!("删除记录失败, {}", e),
+        });
+    }
+
+    if remote.authorized {
+        if let Err(e) = remote.remove_auth() {
+            return Err(ErrorResponse {
+                code: 10004,
+                message: format!("删除认证失败, {}", e),
+            });
+        }
+    }
+
     Ok(())
 }
 
@@ -84,7 +109,7 @@ pub fn login_server(index: usize) -> CmdResult<()> {
         }
     };
     if !remote.authorized {
-        if let Err(e) = remote.authenticate() {
+        if let Err(e) = remote.add_auth() {
             return Err(ErrorResponse {
                 code: 10006,
                 message: e.to_string(),
@@ -101,7 +126,7 @@ fn login(remote: &Remote) -> Result<(), ErrorResponse> {
         remote.user,
         remote.ip,
         remote.port,
-        CONFIG.get_private_key().display()
+        CONFIG.get_private().display()
     );
     if let Err(e) = Command::new("cmd")
         .args(&["/C", "start", "cmd", "/K", &command])

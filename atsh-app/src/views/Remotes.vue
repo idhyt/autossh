@@ -46,7 +46,7 @@
           <!-- <el-button size="small" type="danger" :text="true" :icon="Delete" @click="deleteServer(scope.row.index)"> 删除 -->
           <el-space :size="6">
             <el-button size="small" type="primary" :icon="Connection" @click="loginServer(scope.row)"></el-button>
-            <el-button size="small" type="danger" :icon="Delete" @click="deleteServer(scope.row.index)"></el-button>
+            <el-button size="small" type="danger" :icon="Delete" @click="deleteServer(scope.row)"></el-button>
           </el-space>
         </template>
       </el-table-column>
@@ -239,16 +239,20 @@ async function submitAddForm() {
 }
 
 // 删除服务器
-async function deleteServer(index: number) {
+async function deleteServer(remote: Server) {
+  let info = `<[${remote.index}] ${remote.user}@${remote.ip}:${remote.port}>`
   try {
-    await ElMessageBox.confirm(`确定删除序号为 ${index} 的服务器？`, '警告', {
+    await ElMessageBox.confirm(
+      `确定删除服务器 ${info} 吗？`, '警告', {
       type: 'warning',
+      center: true,
+      // dangerouslyUseHTMLString: true,
       distinguishCancelAndClose: true,
       cancelButtonText: '取消',
       confirmButtonText: '确认'
     })
-    await invoke('delete_server', { index: index })
-    ElMessage.success(`序号 ${index} 的服务器删除成功`)
+    await invoke('delete_server', { index: remote.index })
+    ElMessage.success(`删除服务器 ${info} 成功`)
     loadServers()
   } catch (err) {
     if (err === 'cancel') {
@@ -256,7 +260,8 @@ async function deleteServer(index: number) {
       ElMessage.info('已取消删除操作')
     } else {
       // 其他错误（删除失败）
-      ElMessage.error(`序号 ${index} 的服务器删除失败: ${err}`)
+      ElMessage.error(`删除服务器 ${info} 失败: ${(err as Error).message}`)
+      loadServers()
     }
   }
 }

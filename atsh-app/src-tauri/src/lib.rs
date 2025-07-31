@@ -7,7 +7,9 @@ use cmd::*;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // clean the ATSH_KEY
-    atsh_lib::atsh::set_atshkey(Option::<&str>::None).unwrap();
+    atsh_lib::atsh::CONFIG
+        .set_enc_key(Option::<&str>::None)
+        .unwrap();
     atsh_lib::atsh::initialize(Option::<&str>::None).unwrap();
 
     tauri::Builder::default()
