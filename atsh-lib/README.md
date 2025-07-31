@@ -3,55 +3,77 @@ The atsh/@shell library can be used. See the cli tools [atsh-cli](https://github
 ```rust
 use atsh_lib::atsh::{
     initialize,
-    add,
-    get,
-    try_get,
-    login,
-    get_all,
-    remove,
-    pprint,
-    download,
-    upload,
-    get_atshkey,
-    set_atshkey,
+    add, add_remote,
+    get, get_all, try_get,
+    download, upload,
+    remove, login, pprint,
+    Remote, CONFIG,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // or initialize("/path/to/data/save").expect("initialize failed");
     // default data path
-    initialize(None)?;
+    initialize(Option::<&std::path::Path>::None)?;
     // set data to $home/.atsh.d
     initialize(std::env::home_dir().map(|h| h.join(".atsh.d")))?;
     // get ATSH_KEY
-    let key = get_atshkey()?;
+    let key = CONFIG.get_enc_key()?;
     // set ATSH_KEY
-    set_atshkey(Some("secret"))?;
+    CONFIG.set_enc_key(Some("secret"))?;
     // or export ATSH_KEY
     unsafe { std::env::set_var("ASKEY", "secret") };
     // clear ATSH_KEY
-    set_atshkey(None)?;
+    CONFIG.set_enc_key(Option::<&str>::None)?;
     // add server info
-    add("user", "password", "ip", 22, Some("name"), None)?;
+    add(
+        "user",
+        "password",
+        "ip",
+        22,
+        &Some("name"),
+        &Option::<&str>::None,
+    )?;
+    // or add remote
+    add_remote(&Remote {
+        index: 0, // ignore this value, auto increment when insert to database
+        user: "user".to_string(),
+        password: "password".to_string(),
+        ip: "ip".to_string(),
+        port: 22,
+        authorized: false,
+        name: Some("name".to_string()),
+        note: Option::<String>::None,
+    })?;
     // get all remotes
     let remotes = get_all()?;
     // login by index
     let remote = remotes.get(0).unwrap();
-    login(remote.index)?;
+    login(remote.index, false)?;
+    // login with reauth,
+    // This enforces re-authentication, which can be useful when data is migrated
+    login(remote.index, true)?;
     // get remote by index, return Option<Remote>
-    let remote = get(remote.index)?;
+    let find = get(remote.index)?;
     // get remote by index, return Remote or Error if not found
-    let remote = try_get(remote.index)?;
+    let find = try_get(remote.index)?;
     // remove by index
-    remove(remote.index)?;
+    remove(&vec![remote.index])?;
     // download
-    download(remote.index, vec!["/path/to/remote/test.txt", "/path/to/host/test.txt"])?;
+    download(
+        remote.index,
+        &vec!["/path/to/remote/test.txt", "/path/to/host/test.txt"],
+    )?;
     // upload
-    upload(remote.index, vec!["/path/to/local/test.txt", "/path/to/remote/test.txt"])?;
+    upload(
+        remote.index,
+        &vec!["/path/to/local/test.txt", "/path/to/remote/test.txt"],
+    )?;
     // pretty print little info
     pprint(false)?;
     // pretty print with all info
     pprint(true)?;
     // do something...
+    Ok(())
 }
 ```
 
