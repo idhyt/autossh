@@ -30,6 +30,10 @@ pub fn get_work_dir() -> &'static PathBuf {
     WORK_DIR.get_or_init(|| {
         let wd = if cfg!(test) {
             PathBuf::from("test.atsh.d")
+        } else if let Some(w) = std::env::var_os("ATSH_WORK_DIR") {
+            let wd = PathBuf::from(w);
+            debug!(work_dir=?wd, "The work directory by environment `ATSH_WORK_DIR`");
+            wd
         } else {
             let wd = home_dir()
                 // the system home directory
