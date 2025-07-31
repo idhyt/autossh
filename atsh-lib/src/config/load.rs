@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Error;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
-use tracing::{debug, error};
+use tracing::{debug, warn};
 
 use super::ctx::{get_work_dir, set_work_dir, WORK_DIR_FILE};
 use super::key::{create_sshkey, get_atshkey, set_atshkey, SSHKey};
@@ -43,15 +43,16 @@ impl Config {
 
     /// get ssh private key
     pub fn get_private(&self) -> &Path {
+        self.sshkey.get_private()
+    }
+    /// try get private key, if not exists, create one
+    pub fn try_get_private(&self) -> Result<&Path, Error> {
         let private = self.sshkey.get_private();
         if !private.exists() {
-            debug!(file = ?private, "SSH key does not exist, will create one");
-            if let Err(e) = self.create_sshkey(Option::<&str>::None) {
-                error!(error = ?e, "Failed to create SSH key");
-                std::process::exit(1);
-            }
+            warn!(file = ?private, "💡 SSH key does not exist, will create one");
+            create_sshkey(Option::<&str>::None, private, false)?;
         }
-        private
+        Ok(private)
     }
 
     /// read ssh public key
@@ -82,11 +83,6 @@ impl Config {
     /// generate work directory file path
     pub fn work_dir_file(&self, n: &str) -> PathBuf {
         WORK_DIR_FILE(n)
-    }
-
-    /// create ssh key pair
-    pub fn create_sshkey(&self, pass: Option<impl AsRef<str>>) -> Result<(), Error> {
-        create_sshkey(pass, self.sshkey.get_private())
     }
 }
 

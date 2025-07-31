@@ -107,86 +107,66 @@ impl SSHKey {
     }
 }
 
-fn ask_sshkey_password() -> Result<Option<String>, Error> {
-    use std::io::{self, Write};
-
-    println!("🔑 No sshkey configuration found. Starting generating rsa key pair...");
-    let mut password = Option::<String>::None;
-    loop {
-        println!("🔐 Use password? (Y/y for password, N/n for password-less login)");
-        print!("🛠️ Your choice [Y/N]: ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-
-        match input.trim().to_lowercase().as_str() {
-            "y" => {
-                print!("🔑 Enter password: ");
-                io::stdout().flush()?;
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-                let check = input.trim();
-                if check.len() < 8 {
-                    println!("⚠️ Password must be at least 8 characters long.")
-                } else {
-                    password = Some(check.to_string());
-                    debug!(
-                        "✅ sshkey with ask input password: {}..{}",
-                        &check[..2],
-                        &check[check.len() - 2..]
-                    );
-                    break;
-                }
-            }
-            "n" | "no" => {
-                println!("🚀 Using password-less login");
-                break;
-            }
-            _ => println!("⚠️ Invalid input, please try again"),
-        }
-    }
-
-    Ok(password)
-}
-
 pub fn create_sshkey(
     password: Option<impl AsRef<str>>,
     output: impl AsRef<Path>,
-) -> Result<(), Error> {
-    let set_pass = match password {
-        Some(p) => {
-            let pass = p.as_ref().trim().to_string();
-            if pass.len() < 8 {
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    "password must be at least 8 characters long",
-                ));
-            }
-            debug!(
-                "✅ sshkey with setting password {}..{}",
-                &pass[..1],
-                &pass[pass.len() - 1..]
-            );
-            pass
-        }
-        None => ask_sshkey_password()?.unwrap_or("".to_string()),
-    };
+    interactive: bool,
+) -> Result<PathBuf, Error> {
+    info!("🔑 Starting generating rsa key pair...");
+
     let output = output.as_ref();
-    // ssh-keygen -t rsa -b 2048 -C "atsh" -N "" -f {:?}
-    let args = vec![
+    let mut args = vec![
         "-t",
         "rsa",
         "-b",
         "2048",
         "-C",
         "atsh",
-        "-N",
-        &set_pass,
         "-f",
         output.to_str().unwrap(),
     ];
-    let status = Command::new("ssh-keygen").args(&args).status()?;
+
+    let status = {
+        if interactive {
+            Command::new("ssh-keygen").args(&args).status()?
+        } else {
+            let pass = match password {
+                Some(p) => {
+                    let p = p.as_ref();
+                    if p.len() < 8 {
+                        return Err(Error::new(
+                            ErrorKind::InvalidInput,
+                            "password must be at least 8 characters long",
+                        ));
+                    }
+                    debug!(
+                        "✅ sshkey with setting password {}..{}",
+                        &p[..1],
+                        // &p[p.len().saturating_sub(2)..]
+                        &p[p.len() - 2..]
+                    );
+                    p.to_string()
+                }
+                None => {
+                    warn!("⚠️  No password provided, will use empty password");
+                    "".to_string()
+                }
+            };
+            args.push("-N");
+            args.push(&pass);
+
+            // clean exist key
+            for p in vec![output, &output.with_extension("pub")] {
+                if p.is_file() {
+                    warn!(file = ?p, "SSH Key exists, remove it");
+                    std::fs::remove_file(p)?;
+                }
+            }
+            Command::new("ssh-keygen").args(&args).status()?
+        }
+    };
+
+    // let status = Command::new("ssh-keygen").args(&args).status()?;
     if !status.success() {
         return Err(Error::new(
             ErrorKind::Other,
@@ -196,9 +176,56 @@ pub fn create_sshkey(
             ),
         ));
     }
+
     info!("✅ SSH key generated successfully at: {:?}", output);
-    Ok(())
+
+    Ok(output.to_owned())
 }
+
+// fn ask_sshkey_password() -> Result<Option<String>, Error> {
+//     use std::io::{self, Write};
+
+//     println!("🔑 Starting generating rsa key pair...");
+//     let mut password = Option::<String>::None;
+//     loop {
+//         println!("🔐 Use password? (Y/y for password, N/n for password-less login)");
+//         print!("🛠️ Your choice [Y/N]: ");
+//         io::stdout().flush()?;
+
+//         let mut input = String::new();
+//         io::stdin().read_line(&mut input)?;
+
+//         match input.trim().to_lowercase().as_str() {
+//             "y" | "yes" => {
+//                 print!("🔑 Enter password: ");
+//                 io::stdout().flush()?;
+//                 let mut input = String::new();
+//                 io::stdin().read_line(&mut input)?;
+//                 // let check = input.trim();
+//                 // if check.len() < 8 {
+//                 //     println!("⚠️ Password must be at least 8 characters long.");
+//                 // } else {
+//                 //     password = Some(check.to_string());
+//                 //     debug!(
+//                 //         "✅ sshkey with ask input password: {}..{}",
+//                 //         &check[..2],
+//                 //         &check[check.len() - 2..]
+//                 //     );
+//                 //     break;
+//                 // }
+//                 password = Some(input.trim().to_string());
+//                 break;
+//             }
+//             "n" | "no" => {
+//                 println!("🚀 Using password-less login");
+//                 break;
+//             }
+//             _ => println!("⚠️ Invalid input, please try again"),
+//         }
+//     }
+
+//     Ok(password)
+// }
 
 #[cfg(test)]
 mod tests {
@@ -223,5 +250,33 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("at least 5 characters"));
+    }
+
+    #[test]
+    fn test_sshkey() {
+        let password = "123456";
+        let output = WORK_DIR_FILE("id_rsa");
+        let s = create_sshkey(Some(password), &output, false);
+        assert!(s.is_err());
+        assert!(s
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("least 8 characters long"));
+
+        let password = "12345678";
+        let s = create_sshkey(Some(password), &output, false);
+        println!("{:#?}", s);
+        assert!(s.is_ok());
+        assert_eq!(s.unwrap(), output);
+
+        let check = Command::new("ssh-keygen")
+            .args(&["-y", "-f", output.to_str().unwrap(), "-P", password])
+            .status();
+        assert!(check.is_ok());
+        assert!(check.unwrap().success());
+
+        // let s = create_sshkey(Some(password), &output, true);
+        // assert!(s.is_ok());
     }
 }
