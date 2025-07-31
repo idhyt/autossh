@@ -10,8 +10,8 @@
 ├── atsh                             # autossh.exe / atsh.exe in windows
 └── .atsh.d                          # atsh data
     ├── atsh.db                      # records database
-    ├── atsh_key                     # ssh private key
-    ├── atsh_key.pub                 # ssh public key
+    ├── id_rsa                       # ssh private key
+    ├── id_rsa.pub                   # ssh public key
     ├── config.toml                  # config file with little information
     └── logs                         # log directory
         └── 2025-07-21.json
