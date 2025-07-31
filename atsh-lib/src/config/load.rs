@@ -84,6 +84,23 @@ impl Config {
     pub fn work_dir_file(&self, n: &str) -> PathBuf {
         WORK_DIR_FILE(n)
     }
+
+    /// create ssh key
+    /// `password`: ssh key password, if None, no password
+    /// `output`: ssh key output file path, if None, use work directory
+    /// interactive: interactive mode, if true, call the `ssh-keygen` interactively
+    pub fn create_sshkey(
+        &self,
+        password: Option<impl AsRef<str>>,
+        output: Option<impl AsRef<Path>>,
+        interactive: bool,
+    ) -> Result<PathBuf, Error> {
+        let key = output
+            .as_ref()
+            .map(|p| p.as_ref())
+            .unwrap_or(self.get_private());
+        create_sshkey(password, key, interactive)
+    }
 }
 
 // #[cfg(test)]

@@ -140,6 +140,7 @@ pub fn create_sshkey(
                         ));
                     }
                     debug!(
+                        len = p.len(),
                         "✅ sshkey with setting password {}..{}",
                         &p[..1],
                         // &p[p.len().saturating_sub(2)..]
