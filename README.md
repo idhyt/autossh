@@ -46,6 +46,35 @@ Enter same passphrase again:
 
 输入密码为空(回车)即可，但请妥善保护好你的私钥文件！
 
+## Build && Install
+
+Download the pre-built binary directly from [release](https://github.com/idhyt/autossh/releases)
+
+OR install by cargo
+
+```bash
+cargo install atsh/autossh
+```
+
+OR build from source
+
+```bash
+git clone --depth=1 https://github.com/idhyt/autossh
+cd autossh && cargo build --release
+```
+
+OR cross build for other platform
+
+```bash
+╰─ ./xbuild
+1) x86_64-unknown-linux-musl
+2) aarch64-unknown-linux-musl
+3) x86_64-apple-darwin
+4) aarch64-apple-darwin
+5) x86_64-pc-windows-gnu
+Select the target platform number:
+```
+
 ## 命令
 
 More details see `--help`
@@ -117,33 +146,6 @@ remove multiple records by `rm -i 1 2 3 ...`
 ❯ atsh download -i 1 -p /tmp/test.txt ./test.txt
 ```
 
-## Build && Install
-
-Install by cargo
-
-```bash
-cargo install autossh
-```
-
-OR build from source
-
-```bash
-git clone --depth=1 https://github.com/idhyt/autossh
-cd autossh && cargo build --release
-```
-
-OR cross build for other platform
-
-```bash
-╰─ ./xbuild
-1) x86_64-unknown-linux-musl
-2) aarch64-unknown-linux-musl
-3) x86_64-apple-darwin
-4) aarch64-apple-darwin
-5) x86_64-pc-windows-gnu
-Select the target platform number:
-```
-
 # Changelog
 
 ## 0.4.3
@@ -171,7 +173,7 @@ Select the target platform number:
 使用 [tool.py](https://github.com/idhyt/autossh/blob/main/tool.py) 可将早期版本(<=0.3.2>)的数据迁移到数据库中，请执行以下命令：
 
 ```bash
-mkkdir -p ~/.atsh.d
+mkdir -p ~/.atsh.d
 python tool.py toml2db -i ~/.config/autossh/config.toml -o ~/.atsh.d
 ```
 
