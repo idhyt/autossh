@@ -7,11 +7,12 @@ PKG_NAME=atsh
 function build_target() {
     platform=$1
     name=$2
-    if [[ "$platform" == *"x86_64-pc-windows"* ]]; then
-        cross build --release --target $platform -vv
-    else
-        cross build --release --target $platform --features openssl -vv
-    fi
+    # if [[ "$platform" == *"x86_64-pc-windows"* ]]; then
+    #     cross build --release --target $platform -vv
+    # else
+    #     cross build --release --target $platform --features openssl -vv
+    # fi
+    cross build --release --target $platform -vv
     [ -d "./dist" ] || mkdir -p dist
     cp target/$platform/release/$name ./dist/$platform.$name
     cd ./dist && tar -czvf $PKG_NAME.$platform.tar.gz $platform.$name && cd .. # && rm -rf $platform.$name
