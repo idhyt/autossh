@@ -1,4 +1,5 @@
 mod remote;
+mod rssh;
 mod ssh;
 
 pub use remote::Remote;
