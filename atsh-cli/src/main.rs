@@ -91,7 +91,7 @@ enum Commands {
 #[derive(Parser, Debug)]
 #[clap(
     author = "idhyt",
-    version = env!("CARGO_PKG_VERSION"),
+    version = env!("BUILD_VERSION"),
     about = "The atsh(@shell/autossh) is a simple ssh login tool and allow to automatically login with an empty password",
     long_about = None
 )]
