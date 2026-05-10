@@ -2,6 +2,8 @@ mod config;
 mod connection;
 mod storage;
 
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 pub mod atsh {
     use std::io::{Error, ErrorKind};
     use std::path::Path;
@@ -10,11 +12,10 @@ pub mod atsh {
     use crate::connection::Remotes;
     use crate::storage::log::setup_logging;
 
-    type Result<T> = std::result::Result<T, Error>;
-
     // export the objects to the outside
     pub use crate::config::CONFIG;
     pub use crate::connection::Remote;
+    pub use crate::Result;
 
     pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<()> {
         if let Some(p) = work_dir {
@@ -48,8 +49,8 @@ pub mod atsh {
         )
     }
 
-    pub fn remove(index: &Vec<usize>) -> Result<usize> {
-        Remotes::delete(index)
+    pub async fn remove(index: &Vec<usize>) -> Result<usize> {
+        Remotes::delete(index).await
     }
 
     pub fn get(index: usize) -> Result<Option<Remote>> {
@@ -80,55 +81,56 @@ pub mod atsh {
     // }
 
     // auth params means try auth against the server
-    pub fn login(index: usize, auth: bool) -> Result<()> {
+    pub async fn login(index: usize, auth: bool) -> Result<()> {
         let remote = Remotes::try_get(index)?;
-        remote.login(auth)
+        remote.login(auth).await
     }
 
-    #[deprecated(
-        since = "0.1.2",
-        note = "This function is not clearly expressed; use `upload/download` instead."
-    )]
-    pub fn copy(index: usize, path: &str) -> Result<()> {
-        let paths = path.split('=').collect::<Vec<&str>>();
-        if paths.len() != 2 {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "path format error, like `from=to`",
-            ));
-        }
-        let remote = Remotes::try_get(index)?;
-        if std::path::PathBuf::from(paths[0]).exists() {
-            remote.upload(paths[0], paths[1])
-        } else {
-            remote.download(paths[0], paths[1])
-        }
-    }
+    // #[deprecated(
+    //     since = "0.1.2",
+    //     note = "This function is not clearly expressed; use `upload/download` instead."
+    // )]
+    // pub fn copy(index: usize, path: &str) -> Result<()> {
+    //     let paths = path.split('=').collect::<Vec<&str>>();
+    //     if paths.len() != 2 {
+    //         return Err(Error::new(
+    //             ErrorKind::InvalidInput,
+    //             "path format error, like `from=to`",
+    //         ));
+    //     }
+    //     let remote = Remotes::try_get(index)?;
+    //     if std::path::PathBuf::from(paths[0]).exists() {
+    //         remote.upload(paths[0], paths[1])
+    //     } else {
+    //         remote.download(paths[0], paths[1])
+    //     }
+    // }
 
-    pub fn upload(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
-        if path.len() != 2 {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
+    pub async fn upload(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
+        (path.len() == 2).then_some(()).ok_or_else(|| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
                 "path format error, like `upload -p /local/path /remote/path`",
-            ));
-        }
-        let (local, remote) = (path[0].as_ref(), path[1].as_ref());
-        if !Path::new(local).exists() {
-            return Err(Error::new(ErrorKind::NotFound, "the upload file not found"));
-        }
+            ))
+        })?;
 
-        Remotes::try_get(index)?.upload(local, remote)
+        let (local, remote) = (path[0].as_ref(), path[1].as_ref());
+        Path::new(local).exists().then_some(()).ok_or_else(|| {
+            Box::new(Error::new(ErrorKind::NotFound, "the upload file not found"))
+        })?;
+
+        Remotes::try_get(index)?.upload(local, remote).await
     }
 
-    pub fn download(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
-        if path.len() != 2 {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
+    pub async fn download(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
+        (path.len() == 2).then_some(()).ok_or_else(|| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
                 "path format error, like `upload -p /remote/path /local/path`",
-            ));
-        }
-        let (remote, local) = (path[0].as_ref(), path[1].as_ref());
+            ))
+        })?;
 
-        Remotes::try_get(index)?.download(remote, local)
+        let (remote, local) = (path[0].as_ref(), path[1].as_ref());
+        Remotes::try_get(index)?.download(remote, local).await
     }
 }

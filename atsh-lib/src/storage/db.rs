@@ -59,13 +59,13 @@ pub(crate) fn insert(conn: &Connection, remote: &Remote) -> Result<usize> {
 
 pub(crate) fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote>> {
     let mut stmt = conn.prepare(
-        "SELECT idx, user, password, ip, port, authorized, name, note 
-         FROM records 
+        "SELECT idx, user, password, ip, port, authorized, name, note
+         FROM records
          WHERE idx = ?1",
     )?;
-    let result = stmt.query_row(params![idx], |row| {
+    let result = stmt.query_row([idx as i32], |row| {
         Ok(Remote {
-            index: row.get("idx")?,
+            index: row.get::<_, i32>("idx")? as usize,
             user: row.get("user")?,
             password: decrypt(&row.get::<_, String>("password")?),
             ip: row.get("ip")?,
@@ -87,7 +87,7 @@ pub(crate) fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
     let records = stmt
         .query_map([], |row| {
             Ok(Remote {
-                index: row.get("idx")?,
+                index: row.get::<_, i32>("idx")? as usize,
                 user: row.get("user")?,
                 password: decrypt(&row.get::<_, String>("password")?),
                 authorized: row.get("authorized")?,
@@ -102,13 +102,13 @@ pub(crate) fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
 }
 
 pub(crate) fn delete_index(conn: &Connection, idx: usize) -> Result<usize> {
-    conn.execute("DELETE FROM records WHERE idx = ?", params![idx])
+    conn.execute("DELETE FROM records WHERE idx = ?", [idx as i32])
 }
 
 pub(crate) fn update_authorized(conn: &Connection, idx: usize, authorized: bool) -> Result<usize> {
     conn.execute(
         "UPDATE records SET authorized = ?1 WHERE idx = ?2",
-        params![authorized, idx],
+        (authorized, idx as i32),
     )
 }
 

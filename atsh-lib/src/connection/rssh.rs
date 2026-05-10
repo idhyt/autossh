@@ -17,7 +17,7 @@ impl client::Handler for ClientHandler {
     }
 }
 
-struct SSHSession {
+pub struct SSHSession {
     session: Handle<ClientHandler>,
 }
 
