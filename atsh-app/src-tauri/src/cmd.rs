@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use atsh_lib::atsh::{add, get_all, remove, try_get, Remote, CONFIG};
+use atsh_lib::atsh::{add, get_all, try_get, Remote, CONFIG};
 use serde::{Deserialize, Serialize};
 
 type CmdResult<T> = Result<T, ErrorResponse>;
@@ -62,7 +62,7 @@ pub fn list_servers() -> CmdResult<Vec<Server>> {
 }
 
 #[tauri::command]
-pub fn delete_server(index: usize) -> CmdResult<()> {
+pub async fn delete_server(index: usize) -> CmdResult<()> {
     // if let Err(e) = remove(&vec![index]) {
     //     return Err(ErrorResponse {
     //         code: 10004,
@@ -86,7 +86,7 @@ pub fn delete_server(index: usize) -> CmdResult<()> {
     }
 
     if remote.authorized {
-        if let Err(e) = remote.remove_auth() {
+        if let Err(e) = remote.remove_auth().await {
             return Err(ErrorResponse {
                 code: 10004,
                 message: format!("删除认证失败, {}", e),
@@ -98,7 +98,7 @@ pub fn delete_server(index: usize) -> CmdResult<()> {
 }
 
 #[tauri::command]
-pub fn login_server(index: usize) -> CmdResult<()> {
+pub async fn login_server(index: usize) -> CmdResult<()> {
     let remote = match try_get(index) {
         Ok(remote) => remote,
         Err(e) => {
@@ -109,7 +109,7 @@ pub fn login_server(index: usize) -> CmdResult<()> {
         }
     };
     if !remote.authorized {
-        if let Err(e) = remote.add_auth() {
+        if let Err(e) = remote.add_auth().await {
             return Err(ErrorResponse {
                 code: 10006,
                 message: e.to_string(),
