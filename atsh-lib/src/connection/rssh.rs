@@ -37,6 +37,8 @@ impl SSHSession {
         host: &str,
         port: u16,
     ) -> Result<SSHSession, Error> {
+        // first we check the remote server availability
+
         let config = Arc::new(client::Config::default());
         let handler = ClientHandler;
         let mut session = client::connect(config, (host, port), handler).await?;

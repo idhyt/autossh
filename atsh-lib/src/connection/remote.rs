@@ -3,7 +3,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // use std::io::{BufRead, BufReader};
 use std::io::Error;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::net::TcpStream;
 use tokio::process::Command;
+use tokio::time::Duration;
 use tracing::{debug, info, warn};
 
 use super::rssh::SSHSession;
@@ -193,6 +195,33 @@ impl Remote {
         info!(from=?from, to=?to, "susccess download");
         Ok(())
     }
+
+    async fn is_alive(&self) -> bool {
+        check_port(&self.ip, self.port, None).await
+    }
+}
+
+async fn check_port(host: &str, port: u16, timeout_duration: Option<Duration>) -> bool {
+    let addr = format!("{}:{}", host, port);
+    match tokio::time::timeout(
+        timeout_duration.unwrap_or(Duration::from_secs(3)),
+        TcpStream::connect(&addr),
+    )
+    .await
+    {
+        Ok(Ok(_stream)) => {
+            debug!("✅ {addr} is OPEN");
+            true
+        }
+        Ok(Err(e)) => {
+            warn!("❌ {addr} is CLOSED: {e}");
+            false
+        }
+        Err(e) => {
+            warn!("⏱️ {addr} TIMEOUT {e}");
+            false
+        }
+    }
 }
 
 // #[derive(Serialize, Deserialize)]
@@ -271,7 +300,7 @@ impl Remotes {
         for remote in remotes.iter() {
             debug!(index = remote.index, "delete");
             // remove auth
-            if remote.authorized {
+            if remote.authorized && remote.is_alive().await {
                 remote.remove_auth().await?;
             }
             // delete database
