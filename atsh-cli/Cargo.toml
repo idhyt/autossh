@@ -20,5 +20,6 @@ categories = [
 [dependencies]
 # atsh-lib = "0.1.5"
 atsh-lib = {path = "../atsh-lib" }
-clap = { version = "4.5.41", features = ["derive"] }
-tracing = "0.1.41"
+clap = { version = "4.6.1", features = ["derive"] }
+tokio = "1.52.3"
+tracing = "0.1.44"

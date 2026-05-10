@@ -100,7 +100,8 @@ struct Cli {
     command: Option<Commands>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Cli::parse();
     initialize(Option::<&str>::None).expect("initialize failed");
     // debug!(args = ?args); !!! don't do that, info leak
@@ -118,20 +119,22 @@ fn main() {
             Ok(_) => pprint(false),
             Err(e) => Err(e),
         },
-        Some(Commands::Remove { index }) => match remove(index) {
+        Some(Commands::Remove { index }) => match remove(index).await {
             Ok(_) => pprint(false),
             Err(e) => Err(e),
         },
-        Some(Commands::Login { index, auth }) => login(*index, *auth),
-        Some(Commands::Upload { index, path }) => upload(*index, path),
-        Some(Commands::Download { index, path }) => download(*index, path),
+        Some(Commands::Login { index, auth }) => login(*index, *auth).await,
+        Some(Commands::Upload { index, path }) => upload(*index, path).await,
+        Some(Commands::Download { index, path }) => download(*index, path).await,
         Some(Commands::SshKeygen {
             password,
             output,
             silent,
         }) => CONFIG
             .create_sshkey(password.as_deref(), output.as_deref(), !*silent)
-            .map(|_| ()),
+            .map(|_| ())
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+
         None => pprint(false),
     };
 
