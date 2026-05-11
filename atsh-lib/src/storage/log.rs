@@ -4,10 +4,7 @@ use std::path::Path;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
     filter::LevelFilter,
-    fmt::{
-        self,
-        time::{LocalTime, UtcTime},
-    },
+    fmt::{self, time::LocalTime},
     layer::SubscriberExt,
     util::SubscriberInitExt,
     EnvFilter,
@@ -47,7 +44,7 @@ pub fn setup_logging(work_dir: &Path) -> Result<(), Error> {
                 )
                 .with_target(debug)
                 .with_line_number(debug)
-                .with_timer(UtcTime::rfc_3339()),
+                .with_timer(LocalTime::rfc_3339()),
         );
 
     subscriber.init();
