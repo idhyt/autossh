@@ -126,7 +126,7 @@ pub mod atsh {
         (path.len() == 2).then_some(()).ok_or_else(|| {
             Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "path format error, like `upload -p /remote/path /local/path`",
+                "path format error, like `download -p /remote/path /local/path`",
             ))
         })?;
 

@@ -48,26 +48,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let remotes = get_all()?;
     // login by index
     let remote = remotes.get(0).unwrap();
-    login(remote.index, false)?;
+    login(remote.index, false).await?;
     // login with reauth,
     // This enforces re-authentication, which can be useful when data is migrated
-    login(remote.index, true)?;
+    login(remote.index, true).await?;
     // get remote by index, return Option<Remote>
     let find = get(remote.index)?;
     // get remote by index, return Remote or Error if not found
     let find = try_get(remote.index)?;
     // remove by index
-    remove(&vec![remote.index])?;
+    remove(&vec![remote.index]).await?;
     // download
     download(
         remote.index,
         &vec!["/path/to/remote/test.txt", "/path/to/host/test.txt"],
-    )?;
+    ).await?;
     // upload
     upload(
         remote.index,
         &vec!["/path/to/local/test.txt", "/path/to/remote/test.txt"],
-    )?;
+    ).await?;
     // pretty print little info
     pprint(false)?;
     // pretty print with all info
