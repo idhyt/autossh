@@ -21,15 +21,6 @@ pub struct SSHSession {
     session: Handle<ClientHandler>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum AuthStatus {
-    Add,
-    Exist,
-    Remove,
-    NotFound,
-    // Failure,
-}
-
 impl SSHSession {
     pub async fn new(
         username: &str,
@@ -73,72 +64,84 @@ impl SSHSession {
                 _ => {}
             }
         }
-        Ok(output.trim().to_string())
+        let output = output.trim().to_string();
+        debug!("executed: {}, output: {}", command, output);
+        Ok(output)
     }
 
-    pub async fn get_remote_home(&mut self) -> Result<String, Error> {
-        let home = self.execute("echo $HOME").await?;
-        debug!("remote home: {}", home);
-        Ok(home)
+    pub async fn get_home(&mut self) -> Result<String, Error> {
+        self.execute("echo $HOME").await
+    }
+
+    async fn file_contains(&mut self, f: &str, s: &str) -> Result<bool, Error> {
+        let command = format!(
+            "[ -f {f} ] && grep -qF '{s}' {f} && echo Y || echo N",
+            f = f,
+            s = s.replace('\'', "'\\''")
+        );
+        Ok(self.execute(&command).await? == "Y")
     }
 
     pub async fn authenticate(
         &mut self,
         public_key: &str,
-    ) -> Result<AuthStatus, Box<dyn std::error::Error>> {
-        let command = format!(
-            "mkdir -p {home}/.ssh && \
-             touch {home}/.ssh/authorized_keys && \
-             chmod 700 {home}/.ssh && \
-             chmod 600 {home}/.ssh/authorized_keys && \
-             if ! grep -qF '{key}' {home}/.ssh/authorized_keys; then \
-                 echo '{key}' >> {home}/.ssh/authorized_keys && echo 'ADDED'; \
-             else \
-                 echo 'ALREADY_EXISTS'; \
-             fi",
-            home = self.get_remote_home().await?,
-            key = public_key.replace('\'', "'\\''"),
-        );
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let auth_home = self.get_home().await?;
+        let auth_key = format!("{auth_home}/.ssh/authorized_keys");
+        let pkey = public_key.trim();
 
-        match self.execute(&command).await?.as_str() {
-            "ADDED" => Ok(AuthStatus::Add),
-            "ALREADY_EXISTS" => Ok(AuthStatus::Exist),
-            output => Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("authentication with unexpected output: {}", output),
-            ))),
+        let command = format!(
+            "[ -d {ah}/.ssh ] || (mkdir -p {ah}/.ssh && chmod 700 {ah}/.ssh); \
+             [ -f {ak} ] || (touch {ak} && chmod 600 {ak})",
+            ah = auth_home,
+            ak = auth_key
+        );
+        self.execute(&command).await?;
+
+        if self.file_contains(&auth_key, pkey).await? {
+            debug!("public key already exists in authorized_keys, skipping");
+            return Ok(());
         }
+
+        // add public_key to authorized_keys
+        let command = format!(
+            "echo '{pk}' >> {ak}",
+            ak = auth_key,
+            pk = pkey.replace('\'', "'\\''")
+        );
+        self.execute(&command).await?;
+
+        // check the file contains the public key
+        if !self.file_contains(&auth_key, pkey).await? {
+            return Err("failed to add public key to authorized_keys".into());
+        }
+
+        Ok(())
     }
 
-    pub async fn revoke(
-        &mut self,
-        public_key: &str,
-    ) -> Result<AuthStatus, Box<dyn std::error::Error>> {
-        let command = format!(
-            "if [ -f ~/.ssh/authorized_keys ]; then \
-                 if grep -qF '{key}' {home}/.ssh/authorized_keys; then \
-                     grep -vF '{key}' {home}/.ssh/authorized_keys > {home}/.ssh/authorized_keys.tmp && \
-                     mv {home}/.ssh/authorized_keys.tmp {home}/.ssh/authorized_keys && \
-                     chmod 600 {home}/.ssh/authorized_keys && \
-                     echo 'REMOVED'; \
-                 else \
-                     echo 'NOT_FOUND'; \
-                 fi; \
-             else \
-                 echo 'FILE_NOT_EXIST'; \
-             fi",
-            home = self.get_remote_home().await?,
-            key = public_key.replace('\'', "'\\''"),
-        );
+    pub async fn revoke(&mut self, public_key: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let auth_home = self.get_home().await?;
+        let auth_key = format!("{auth_home}/.ssh/authorized_keys");
+        let pkey = public_key.trim();
 
-        match self.execute(&command).await?.as_str() {
-            "REMOVED" => Ok(AuthStatus::Remove),
-            "FILE_NOT_EXIST" | "NOT_FOUND" => Ok(AuthStatus::NotFound),
-            output => Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("revoke with unexpected output: {}", output),
-            ))),
+        if !self.file_contains(&auth_key, pkey).await? {
+            debug!("public key not found in authorized_keys, skipping");
+            return Ok(());
         }
+
+        let command = format!(
+            "grep -vF '{pk}' {ak} > {ak}.tmp && mv {ak}.tmp {ak} && chmod 600 {ak}",
+            ak = auth_key,
+            pk = pkey.replace('\'', "'\\''"),
+        );
+        self.execute(&command).await?;
+
+        // check the file contains the public key
+        if self.file_contains(&auth_key, pkey).await? {
+            return Err("failed to revoke public key from authorized_keys".into());
+        }
+
+        Ok(())
     }
 }
 
@@ -160,19 +163,19 @@ mod tests {
         }
         let mut session = conn.unwrap();
 
-        let home = session.get_remote_home().await.unwrap();
+        let home = session.get_home().await.unwrap();
         println!("remote home: {}", home);
 
-        let output = session.authenticate(public_key).await.unwrap();
-        assert_eq!(output, AuthStatus::Add);
+        let output = session.authenticate(public_key).await;
+        assert!(output.is_ok());
 
-        let output = session.authenticate(public_key).await.unwrap();
-        assert_eq!(output, AuthStatus::Exist);
+        let output = session.authenticate(public_key).await;
+        assert!(output.is_ok());
 
-        let output = session.revoke(public_key).await.unwrap();
-        assert_eq!(output, AuthStatus::Remove);
+        let output = session.revoke(public_key).await;
+        assert!(output.is_ok());
 
-        let output = session.revoke(public_key).await.unwrap();
-        assert_eq!(output, AuthStatus::NotFound);
+        let output = session.revoke(public_key).await;
+        assert!(output.is_ok());
     }
 }
