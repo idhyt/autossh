@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]*.[0-9]*.[0-9]*"
+
+jobs:
+  # Linux (musl) 构建: x86_64 和 aarch64
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-musl, aarch64-unknown-linux-musl]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install musl tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            cargo install cross
+          fi
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            cross build -p atsh --release --target ${{ matrix.target }}
+          else
+            cargo build -p atsh --release --target ${{ matrix.target }}
+          fi
+
+      - name: Rename binary for uniqueness
+        run: |
+          mv target/${{ matrix.target }}/release/atsh \
+             target/${{ matrix.target }}/release/atsh-${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/atsh-${{ matrix.target }}
+
+  # macOS 构建: x86_64 和 aarch64
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build -p atsh --release --target ${{ matrix.target }}
+
+      - name: Rename binary for uniqueness
+        run: |
+          mv target/${{ matrix.target }}/release/atsh \
+            target/${{ matrix.target }}/release/atsh-${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/atsh-${{ matrix.target }}
+
+  # Windows MSVC 构建 (x86_64 和 aarch64)
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build -p atsh --release --target ${{ matrix.target }}
+
+      - name: Rename binary for uniqueness
+        shell: powershell
+        run: |
+          Move-Item -Path "target/${{ matrix.target }}/release/atsh.exe" `
+                    -Destination "target/${{ matrix.target }}/release/atsh-${{ matrix.target }}.exe"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/atsh-${{ matrix.target }}.exe
+
+  # 创建 GitHub Release 并上传所有构建产物
+  create-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/*/atsh-*
