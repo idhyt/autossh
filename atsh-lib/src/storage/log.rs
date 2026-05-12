@@ -16,7 +16,9 @@ pub fn setup_logging(work_dir: &Path) -> Result<(), Error> {
         std::fs::create_dir_all(&log_dir)?;
     }
 
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("russh=info".parse().unwrap());
     let debug = filter
         .max_level_hint()
         .map(|level| level >= LevelFilter::DEBUG)
