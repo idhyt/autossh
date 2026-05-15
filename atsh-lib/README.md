@@ -10,7 +10,8 @@ use atsh_lib::atsh::{
     Remote, CONFIG,
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // or initialize("/path/to/data/save").expect("initialize failed");
     // default data path
     initialize(Option::<&std::path::Path>::None)?;
