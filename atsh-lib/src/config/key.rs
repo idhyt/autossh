@@ -95,15 +95,30 @@ impl SSHKey {
         self.private.as_path()
     }
 
-    pub fn read_public(&self) -> Result<String, Error> {
-        let key = self.get_public();
+    fn read_key(&self, name: &str) -> Result<String, Error> {
+        let key = match name {
+            "public" => self.get_public(),
+            "private" => self.get_private(),
+            _ => panic!("unreachable"),
+        };
         if !key.is_file() {
             return Err(Error::new(
                 ErrorKind::NotFound,
-                "public key not found, you can generate it by `ssh-keygen` and set it to config",
+                format!(
+                    "{} key not found, you can generate it by `ssh-keygen` and set it to config",
+                    name
+                ),
             ));
         }
         std::fs::read_to_string(key)
+    }
+
+    pub fn read_public(&self) -> Result<String, Error> {
+        self.read_key("public")
+    }
+
+    pub fn read_private(&self) -> Result<String, Error> {
+        self.read_key("private")
     }
 }
 

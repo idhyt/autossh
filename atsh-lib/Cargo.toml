@@ -28,7 +28,7 @@ rusqlite = { version = "0.39.0", features = ["bundled"] }
 russh = { version = "0.60.2", default-features = false, features = ["ring"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-tokio = { version = "1.52.3", features = ["process"] }
+tokio = { version = "1.52.3", features = ["process", "io-std"] }
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-appender = "0.2.5"

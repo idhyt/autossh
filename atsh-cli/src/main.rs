@@ -2,7 +2,9 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing::error;
 
-use atsh_lib::atsh::{add, download, initialize, login, pprint, remove, upload, CONFIG};
+use atsh_lib::atsh::{
+    add, download, initialize, login, pprint, remove, run_command, upload, CONFIG,
+};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -86,6 +88,28 @@ enum Commands {
         #[arg(short, long, default_value = "false")]
         silent: bool,
     },
+    /// Run command on the remote server with index or password.
+    #[clap(aliases = &["cmd", "run"])]
+    Command {
+        /// The index of the remote server to run the command on.
+        #[arg(short, long)]
+        index: Option<usize>,
+        /// the login user.
+        #[arg(short, long)]
+        user: Option<String>,
+        /// the login password.
+        #[arg(short, long)]
+        password: Option<String>,
+        /// the login id address.
+        #[arg(short = 'I', long)]
+        ip: Option<String>,
+        /// the login port.
+        #[arg(short = 'P', long, default_value = "22")]
+        port: u16,
+        /// the command to run on the remote server.
+        #[arg(short, long)]
+        command: Option<String>,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -134,6 +158,26 @@ async fn main() {
             .create_sshkey(password.as_deref(), output.as_deref(), !*silent)
             .map(|_| ())
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+
+        Some(Commands::Command {
+            index,
+            user,
+            password,
+            ip,
+            port,
+            command,
+        }) => {
+            run_command(
+                *index,
+                user.as_deref(),
+                password.as_deref(),
+                ip.as_deref(),
+                Some(*port),
+                command.as_deref(),
+                (None, None),
+            )
+            .await
+        }
 
         None => pprint(false),
     };

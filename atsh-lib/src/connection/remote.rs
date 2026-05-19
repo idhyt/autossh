@@ -1,6 +1,5 @@
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// use std::io::{BufRead, BufReader};
 use std::io::Error;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
@@ -123,81 +122,112 @@ impl Remote {
         Ok(())
     }
 
-    async fn scp(&self, args: &Vec<&str>) -> Result<()> {
-        // 如果没有认证，则先认证
-        if !self.authorized {
-            debug!(remote = self.to_string(), "no authorized, try authenticate");
-            self.add_auth().await?;
-        }
-        // info!("\n🚨 scp {}\n🚨 input `y` to run and other to cancel.", cmd);
-        // let mut read = String::new();
-        // std::io::stdin().read_line(&mut read)?;
-        // let read = read.trim();
-        // if read == "y" {}
-        debug!(args=?args, "scp");
+    async fn execute(&self, program: &str, cmd: &str, stream: u8) -> Result<()> {
+        debug!("execute: {} {}", program, cmd);
+        let args = cmd.split_whitespace().collect::<Vec<_>>();
+        let mut child = if stream == 1 {
+            let mut child = Command::new(program)
+                .args(args)
+                .stdout(std::process::Stdio::piped())
+                .spawn()?;
 
-        let mut child = Command::new("scp")
-            .args(args)
-            .stderr(std::process::Stdio::piped())
-            .spawn()?;
+            let stdout = child.stdout.take().ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stdout is none")
+            })?;
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
 
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stderr is none"))?;
+            while let Some(line) = lines.next_line().await? {
+                println!("{}", line);
+            }
+            child
+        } else {
+            let mut child = Command::new(program)
+                .args(args)
+                .stderr(std::process::Stdio::piped())
+                .spawn()?;
+            let stderr = child.stderr.take().ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stderr is none")
+            })?;
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
 
-        let reader = BufReader::new(stderr);
-        let mut lines = reader.lines();
+            while let Some(line) = lines.next_line().await? {
+                println!("{}", line);
+            }
 
-        while let Some(line) = lines.next_line().await? {
-            println!("{}", line);
-        }
+            child
+        };
 
         let _ = child.wait().await?;
 
         Ok(())
     }
 
+    // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa ./test.txt idhyt@1.2.3.4:/tmp
     pub async fn upload(&self, from: &str, to: &str) -> Result<()> {
-        // debug!(from = ?from, to=?to, "upload");
-        // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa ./test.txt idhyt@1.2.3.4:/tmp
-        let port = self.port.to_string();
-        let remote = format!("{}@{}:{}", self.user, self.ip, to);
-        let cmd = vec![
-            "-r",
-            "-P",
-            &port,
-            "-i",
-            CONFIG.get_private().to_str().unwrap(),
-            from,
-            &remote,
-        ];
-        self.scp(&cmd).await?;
+        if !self.authorized {
+            debug!(remote = self.to_string(), "no authorized, try authenticate");
+            self.add_auth().await?;
+        }
+        let args = format!(
+            "-r -P {p} -i {k} {l} {u}@{i}:{r}",
+            p = self.port,
+            k = CONFIG.get_private().display(),
+            l = from,
+            u = self.user,
+            i = self.ip,
+            r = to
+        );
+
+        self.execute("scp", &args, 2).await?;
         info!(from=?from, to=?to, "susccess upload");
         Ok(())
     }
 
+    // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa idhyt@1.2.3.4:/tmp/test.txt ./
     pub async fn download(&self, from: &str, to: &str) -> Result<()> {
-        // debug!(from = ?from, to=?to, "download");
-        // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa idhyt@1.2.3.4:/tmp/test.txt ./
-        let port = self.port.to_string();
-        let remote = format!("{}@{}:{}", self.user, self.ip, from);
-        let cmd = vec![
-            "-r",
-            "-P",
-            &port,
-            "-i",
-            CONFIG.get_private().to_str().unwrap(),
-            &remote,
-            to,
-        ];
-        self.scp(&cmd).await?;
+        let args = format!(
+            "-r -P {p} -i {k} {u}@{i}:{r} {l}",
+            p = self.port,
+            k = CONFIG.get_private().display(),
+            r = from,
+            u = self.user,
+            i = self.ip,
+            l = to
+        );
+
+        self.execute("scp", &args, 2).await?;
         info!(from=?from, to=?to, "susccess download");
         Ok(())
     }
 
     async fn is_alive(&self) -> bool {
         check_port(&self.ip, self.port, None).await
+    }
+
+    // ssh -P 22 -i ~/.ssh/id_rsa user@host 'ls -l /tmp'
+    pub async fn run_command(&self, cmd: Option<&str>) -> Result<()> {
+        let args = if let Some(c) = cmd {
+            format!(
+                "-P {p} -i {k} {u}@{i} {c}",
+                p = self.port,
+                k = CONFIG.get_private().display(),
+                u = self.user,
+                i = self.ip,
+                c = c
+            )
+        } else {
+            format!(
+                "-P {p} -i {k} {u}@{i}",
+                p = self.port,
+                k = CONFIG.get_private().display(),
+                u = self.user,
+                i = self.ip,
+            )
+        };
+        self.execute("ssh", &args, 1).await?;
+        Ok(())
     }
 }
 

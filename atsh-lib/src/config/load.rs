@@ -60,6 +60,11 @@ impl Config {
         self.sshkey.read_public()
     }
 
+    /// read ssh private key
+    pub fn read_private(&self) -> Result<String, Error> {
+        self.sshkey.read_private()
+    }
+
     /// get `ATSH_KEY` which used to encrypt the data like password
     pub fn get_enc_key(&self) -> Result<String, Error> {
         get_atshkey()

@@ -9,7 +9,7 @@ pub mod atsh {
     use std::path::Path;
     use tracing::debug;
 
-    use crate::connection::Remotes;
+    use crate::connection::{Remotes, SSHSession};
     use crate::storage::log::setup_logging;
 
     // export the objects to the outside
@@ -132,5 +132,49 @@ pub mod atsh {
 
         let (remote, local) = (path[0].as_ref(), path[1].as_ref());
         Remotes::try_get(index)?.download(remote, local).await
+    }
+
+    pub async fn run_command(
+        index: Option<usize>,
+        user: Option<&str>,
+        password: Option<&str>,
+        ip: Option<&str>,
+        port: Option<u16>,
+        cmd: Option<&str>,
+        wh: (Option<u32>, Option<u32>),
+    ) -> Result<()> {
+        let mut session;
+        if let Some(i) = index {
+            let remote = Remotes::try_get(i)?;
+            // session = SSHSession::new_with_key(
+            //     &remote.user,
+            //     CONFIG.read_private()?.as_str(),
+            //     &remote.ip,
+            //     remote.port,
+            // )
+            // .await?;
+            remote.run_command(cmd).await?;
+            return Ok(());
+        } else {
+            session = SSHSession::new(
+                user.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "user is required")
+                })?,
+                password.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "password is required")
+                })?,
+                ip.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "ip is required")
+                })?,
+                port.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "port is required")
+                })?,
+            )
+            .await?;
+        }
+        session
+            .interactive_shell(wh.0.unwrap_or(80), wh.1.unwrap_or(120), cmd)
+            .await?;
+        Ok(())
     }
 }

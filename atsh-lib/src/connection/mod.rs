@@ -4,3 +4,4 @@ mod rssh;
 
 pub use remote::Remote;
 pub(crate) use remote::Remotes;
+pub(crate) use rssh::SSHSession;
