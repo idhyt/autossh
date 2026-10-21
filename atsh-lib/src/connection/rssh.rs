@@ -181,6 +181,7 @@ impl SSHSession {
         local_path: &str,
         remote_path: &str,
     ) -> Result<()> {
+        use indicatif::{ProgressBar, ProgressStyle};
         use russh_sftp::client::SftpSession;
         use tokio::io::AsyncWriteExt;
 
@@ -190,10 +191,28 @@ impl SSHSession {
 
         let remote_path = resolve_remote_path(&sftp, local_path, remote_path).await;
         let data = tokio::fs::read(local_path).await?;
+        let total = data.len() as u64;
+
+        let bar = ProgressBar::new(total).with_style(
+            ProgressStyle::default_bar()
+                .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} {eta}")
+                .unwrap()
+                .progress_chars("=>-"),
+        );
+        bar.set_message(local_path.to_string());
+
         let mut file = sftp.create(&remote_path).await?;
-        file.write_all(&data).await?;
+        let chunk_size = 64 * 1024;
+        let mut written: u64 = 0;
+        while written < total {
+            let end = std::cmp::min(written + chunk_size, total);
+            file.write_all(&data[written as usize..end as usize]).await?;
+            written = end;
+            bar.set_position(written);
+        }
         file.flush().await?;
         file.shutdown().await?;
+        bar.finish_with_message(format!("{} uploaded", local_path));
 
         debug!(local = local_path, remote = remote_path, "upload complete");
         Ok(())
@@ -204,6 +223,7 @@ impl SSHSession {
         remote_path: &str,
         local_path: &str,
     ) -> Result<()> {
+        use indicatif::{ProgressBar, ProgressStyle};
         use russh_sftp::client::SftpSession;
         use tokio::io::AsyncReadExt;
 
@@ -213,10 +233,29 @@ impl SSHSession {
 
         let local_path = resolve_local_path(local_path, remote_path);
         let mut file = sftp.open(remote_path).await?;
-        let mut data = Vec::new();
-        file.read_to_end(&mut data).await?;
+        let total = file.metadata().await?.len();
+
+        let bar = ProgressBar::new(total).with_style(
+            ProgressStyle::default_bar()
+                .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} {eta}")
+                .unwrap()
+                .progress_chars("=>-"),
+        );
+        bar.set_message(remote_path.to_string());
+
+        let mut data = Vec::with_capacity(total as usize);
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            let n = file.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            data.extend_from_slice(&buf[..n]);
+            bar.inc(n as u64);
+        }
 
         tokio::fs::write(&local_path, data).await?;
+        bar.finish_with_message(format!("{} downloaded", remote_path));
 
         debug!(local = local_path, remote = remote_path, "download complete");
         Ok(())
