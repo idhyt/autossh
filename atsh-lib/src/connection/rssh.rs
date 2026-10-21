@@ -182,20 +182,15 @@ impl SSHSession {
         remote_path: &str,
     ) -> Result<()> {
         use russh_sftp::client::SftpSession;
-        use russh_sftp::protocol::OpenFlags;
         use tokio::io::AsyncWriteExt;
 
         let channel = self.session.channel_open_session().await?;
         channel.request_subsystem(true, "sftp").await?;
         let sftp = SftpSession::new(channel.into_stream()).await?;
 
+        let remote_path = resolve_remote_path(&sftp, local_path, remote_path).await;
         let data = tokio::fs::read(local_path).await?;
-        let mut file = sftp
-            .open_with_flags(
-                remote_path,
-                OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE | OpenFlags::READ,
-            )
-            .await?;
+        let mut file = sftp.create(&remote_path).await?;
         file.write_all(&data).await?;
         file.flush().await?;
         file.shutdown().await?;
@@ -216,11 +211,12 @@ impl SSHSession {
         channel.request_subsystem(true, "sftp").await?;
         let sftp = SftpSession::new(channel.into_stream()).await?;
 
+        let local_path = resolve_local_path(local_path, remote_path);
         let mut file = sftp.open(remote_path).await?;
         let mut data = Vec::new();
         file.read_to_end(&mut data).await?;
 
-        tokio::fs::write(local_path, data).await?;
+        tokio::fs::write(&local_path, data).await?;
 
         debug!(local = local_path, remote = remote_path, "scp download success");
         Ok(())
@@ -403,6 +399,41 @@ impl SSHSession {
             .disconnect(Disconnect::ByApplication, "Session ended", "en")
             .await?;
         Ok(())
+    }
+}
+
+fn extract_filename(path: &str) -> &str {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(path)
+}
+
+async fn resolve_remote_path(
+    sftp: &russh_sftp::client::SftpSession,
+    local_path: &str,
+    remote_path: &str,
+) -> String {
+    if remote_path.ends_with('/')
+        || sftp
+            .metadata(remote_path)
+            .await
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+    {
+        let name = extract_filename(local_path);
+        format!("{}/{}", remote_path.trim_end_matches('/'), name)
+    } else {
+        remote_path.to_string()
+    }
+}
+
+fn resolve_local_path(local_path: &str, remote_path: &str) -> String {
+    if local_path.ends_with('/') || std::path::Path::new(local_path).is_dir() {
+        let name = extract_filename(remote_path);
+        format!("{}/{}", local_path.trim_end_matches('/'), name)
+    } else {
+        local_path.to_string()
     }
 }
 
