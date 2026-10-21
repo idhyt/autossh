@@ -36,20 +36,21 @@ impl Remote {
             let db = ctx.db().lock();
             db.insert(self, &enc)?
         };
-        info!(remote = self.to_string(), "success add record");
+        info!(remote = self.to_string(), "added record");
         Ok(n)
     }
 
     pub fn delete_from_db(&self, ctx: &AppContext) -> Result<()> {
         let db = ctx.db().lock();
         db.delete_index(self.index)?;
-        info!(remote = self.to_string(), "success delete record");
+        info!(remote = self.to_string(), "deleted record");
         Ok(())
     }
 
     /// Authorize the public key on the remote, returning the password session
     /// so callers can reuse the connection instead of reconnecting.
     pub async fn authorize_public_key(&self, ctx: &AppContext) -> Result<()> {
+        info!(remote = self.to_string(), "authorizing public key");
         let password = &self.password;
         let mut session = SSHSession::new(&self.user, password, &self.ip, self.port).await?;
         let pub_key = ctx.config().read_public()?;
@@ -58,16 +59,16 @@ impl Remote {
             let db = ctx.db().lock();
             db.update_authorized(self.index, true)?;
         }
-        info!(remote = self.to_string(), "success add authenticate");
+        info!(remote = self.to_string(), "public key authorized");
         Ok(())
     }
 
     pub async fn deauthorize_public_key(&self, ctx: &AppContext) -> Result<()> {
-        let mut session =
-            SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
+        info!(remote = self.to_string(), "revoking public key");
+        let mut session = SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
         let pub_key = ctx.config().read_public()?;
         session.revoke(pub_key.as_str()).await?;
-        info!(remote = self.to_string(), "success remove authenticate");
+        info!(remote = self.to_string(), "public key revoked");
         Ok(())
     }
 
@@ -79,44 +80,63 @@ impl Remote {
     }
 
     pub async fn login(&self, ctx: &AppContext, reauth: bool) -> Result<()> {
+        info!(remote = self.to_string(), "logging in");
         if !self.authorized || reauth {
             self.authorize_public_key(ctx).await?;
         }
         let key_path = self.private_key_path(ctx)?;
         let mut session =
             SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
-        session.interactive_login_shell().await?;
-        info!(remote = self.to_string(), "success login");
+        let result = session.interactive_login_shell().await;
+        match result {
+            Ok(()) => info!(remote = self.to_string(), "login session ended"),
+            Err(e) => {
+                warn!(remote = self.to_string(), error = %e, "login session terminated unexpectedly");
+                return Err(e);
+            }
+        }
         Ok(())
     }
 
     pub async fn upload(&self, ctx: &AppContext, from: &str, to: &str) -> Result<()> {
+        info!(from = from, to = to, remote = self.to_string(), "uploading");
         if !self.authorized {
-            debug!(remote = self.to_string(), "no authorized, try authenticate");
+            debug!(
+                remote = self.to_string(),
+                "not authorized, attempting authentication"
+            );
             self.authorize_public_key(ctx).await?;
         }
         let key_path = self.private_key_path(ctx)?;
         let mut session =
             SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.scp_upload(from, to).await?;
-        info!(from = from, to = to, "success upload");
+        info!(from = from, to = to, "uploaded");
         Ok(())
     }
 
     pub async fn download(&self, ctx: &AppContext, from: &str, to: &str) -> Result<()> {
+        info!(
+            from = from,
+            to = to,
+            remote = self.to_string(),
+            "downloading"
+        );
         let key_path = self.private_key_path(ctx)?;
         let mut session =
             SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.scp_download(from, to).await?;
-        info!(from = from, to = to, "success download");
+        info!(from = from, to = to, "downloaded");
         Ok(())
     }
 
     pub async fn run_command(&self, ctx: &AppContext, cmd: Option<&str>) -> Result<()> {
+        info!(remote = self.to_string(), command = cmd, "running command");
         let key_path = self.private_key_path(ctx)?;
         let mut session =
             SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.interactive_shell(80, 24, cmd).await?;
+        info!(remote = self.to_string(), "command finished");
         Ok(())
     }
 }
@@ -134,7 +154,7 @@ impl Remotes {
         let db = ctx.db().lock();
         let remote = db.query_index(idx, |enc| ctx.decrypt_password(enc))?;
         if remote.is_some() {
-            info!(index = idx, "success get remote");
+            debug!(index = idx, "found remote");
         } else {
             warn!(index = idx, "remote not found");
         }
@@ -147,7 +167,7 @@ impl Remotes {
 
     pub fn get_all(ctx: &AppContext) -> Result<Remotes> {
         let remotes = Remotes::load(ctx)?;
-        info!("success get all remotes {}", remotes.0.len());
+        info!(count = remotes.0.len(), "loaded remotes");
         Ok(remotes)
     }
 
@@ -180,9 +200,9 @@ impl Remotes {
             .iter()
             .filter_map(|&idx| Remotes::get(ctx, *idx).transpose())
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        debug!(total = remotes.len(), "delete");
+        debug!(total = remotes.len(), "deleting remotes");
         for remote in remotes.iter() {
-            debug!(index = remote.index, "delete");
+            debug!(index = remote.index, "deleting remote");
             if remote.authorized {
                 if let Err(e) = remote.deauthorize_public_key(ctx).await {
                     warn!("failed to revoke auth for remote {}: {}", remote, e);
@@ -243,7 +263,7 @@ impl RemoteDisplay {
                     .collect::<Vec<Cell>>(),
             ));
         }
-        debug!("the remote list total: {}", remotes.len());
+        debug!(total = remotes.len(), "printed remote list");
         table.printstd();
     }
 }

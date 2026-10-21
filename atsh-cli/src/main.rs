@@ -187,7 +187,7 @@ async fn main() {
     };
 
     if let Err(e) = result {
-        error!(error = %e, "Run command failed");
+        error!(error = %e, "command failed");
         std::process::exit(1);
     }
 }

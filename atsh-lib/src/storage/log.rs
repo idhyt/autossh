@@ -3,7 +3,6 @@ use std::path::Path;
 
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
-    filter::LevelFilter,
     fmt::{self, time::LocalTime},
     layer::SubscriberExt,
     util::SubscriberInitExt,
@@ -12,25 +11,24 @@ use tracing_subscriber::{
 
 pub fn setup_logging(work_dir: &Path) -> Result<(), Error> {
     let log_dir = work_dir.join("logs");
-    if !log_dir.is_dir() {
-        std::fs::create_dir_all(&log_dir)?;
-    }
+    std::fs::create_dir_all(&log_dir)?;
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info"))
-        .add_directive("russh=info".parse().unwrap());
-    let debug = filter
+        .add_directive("russh=info".parse().expect("static directive"));
+
+    // Show source location only when the effective level is debug or lower.
+    let show_location = filter
         .max_level_hint()
-        .map(|level| level >= LevelFilter::DEBUG)
-        .unwrap_or(false);
+        .is_none_or(|level| level <= tracing_subscriber::filter::LevelFilter::DEBUG);
 
     let subscriber = tracing_subscriber::registry()
         .with(filter)
         .with(
             fmt::Layer::new()
                 .with_writer(std::io::stderr)
-                .with_target(debug)
-                .with_line_number(debug)
+                .with_target(show_location)
+                .with_line_number(show_location)
                 .with_timer(LocalTime::rfc_3339()),
         )
         .with(
@@ -39,19 +37,18 @@ pub fn setup_logging(work_dir: &Path) -> Result<(), Error> {
                 .with_writer(
                     RollingFileAppender::builder()
                         .rotation(Rotation::DAILY)
-                        // .filename_prefix("atsh.log")
                         .filename_suffix("json")
                         .build(log_dir)
                         .expect("Failed to create log file"),
                 )
-                .with_target(debug)
-                .with_line_number(debug)
+                .with_target(show_location)
+                .with_line_number(show_location)
                 .with_timer(LocalTime::rfc_3339()),
         );
 
     subscriber.init();
     tracing::debug!(
-        "Logging initialized (RUST_LOG={})",
+        "logging initialized (RUST_LOG={})",
         std::env::var("RUST_LOG").unwrap_or_default()
     );
     Ok(())

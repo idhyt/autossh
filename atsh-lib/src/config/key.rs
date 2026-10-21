@@ -53,7 +53,7 @@ pub fn create_sshkey(
     output: impl AsRef<Path>,
     interactive: bool,
 ) -> Result<PathBuf> {
-    info!("Starting generating rsa key pair...");
+    info!("generating rsa key pair...");
 
     let output = output.as_ref();
     let mut args = vec![
@@ -84,7 +84,7 @@ pub fn create_sshkey(
                 p.to_string()
             }
             None => {
-                warn!("No password provided, will use empty password");
+                warn!("no password provided, key will be passwordless");
                 String::new()
             }
         };
@@ -93,7 +93,7 @@ pub fn create_sshkey(
 
         for p in [output, &output.with_extension("pub")] {
             if p.is_file() {
-                warn!(file = ?p, "SSH Key exists, remove it");
+                warn!(file = ?p, "ssh key exists, removing it");
                 std::fs::remove_file(p)?;
             }
         }
@@ -107,7 +107,7 @@ pub fn create_sshkey(
         )));
     }
 
-    info!("SSH key generated successfully at: {:?}", output);
+    info!(path = %output.display(), "ssh key generated");
     Ok(output.to_owned())
 }
 

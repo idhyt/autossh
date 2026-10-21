@@ -15,9 +15,9 @@ impl Db {
     /// Open (or create) the database at `path`, initializing the schema.
     pub fn open(path: &Path) -> Result<Self> {
         if path.is_file() {
-            debug!(file=?path, "Loading Database exists and using");
+            debug!(file=?path, "database found, opening");
         } else {
-            warn!(file=?path, "Loading Database not found and new one");
+            warn!(file=?path, "database not found, creating new");
         }
         let conn = Connection::open(path)?;
         conn.execute(

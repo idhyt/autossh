@@ -23,7 +23,7 @@ pub mod atsh {
             None => AppContext::default(),
         };
         setup_logging(ctx.work_dir())?;
-        debug!("success initialize at {:?}", ctx.work_dir());
+        debug!(work_dir = ?ctx.work_dir(), "initialized");
         Ok(ctx)
     }
 

@@ -19,7 +19,7 @@ impl Config {
             let toml = toml::to_string(&default).expect("Failed to serialize config");
             std::fs::write(&file, toml)?;
         }
-        debug!(file = ?file, "Loading config");
+        debug!(file = ?file, "loading config");
         let content = std::fs::read_to_string(&file)?;
         Ok(toml::from_str(&content).expect("Failed to parse config.toml"))
     }
@@ -44,7 +44,7 @@ impl Config {
     pub fn try_get_private(&self) -> Result<&Path> {
         let private = self.sshkey.get_private();
         if !private.exists() {
-            warn!(file = ?private, "SSH key does not exist, will create one");
+            warn!(file = ?private, "ssh key missing, creating one");
             create_sshkey(Option::<&str>::None, private, false)?;
         }
         Ok(private)

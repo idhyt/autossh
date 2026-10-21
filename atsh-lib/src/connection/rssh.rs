@@ -26,7 +26,7 @@ pub struct SSHSession {
 fn handle_auth_result(auth_result: AuthResult, method_name: &str) -> Result<()> {
     match auth_result {
         AuthResult::Success => {
-            debug!("Authentication (with {}) succeeded", method_name);
+            debug!("authenticated ({})", method_name);
             Ok(())
         }
         AuthResult::Failure {
@@ -34,7 +34,7 @@ fn handle_auth_result(auth_result: AuthResult, method_name: &str) -> Result<()> 
             partial_success,
         } => {
             let msg = format!(
-                "Authentication (with {}) failed, remaining_methods: {:?}, partial_success: {}",
+                "authentication ({}) failed, remaining_methods: {:?}, partial_success: {}",
                 method_name, remaining_methods, partial_success
             );
             error!("{}", msg);
@@ -105,7 +105,7 @@ impl SSHSession {
             }
         }
         let output = output.trim().to_string();
-        debug!("executed: {}, output: {}", command, output);
+        debug!(command = command, "executed command");
         Ok(output)
     }
 
@@ -135,7 +135,7 @@ impl SSHSession {
         self.execute(&setup).await?;
 
         if self.file_contains(&auth_key, pkey).await? {
-            debug!("public key already exists in authorized_keys, skipping");
+            debug!("public key already present in authorized_keys, skipping");
             return Ok(());
         }
 
@@ -157,7 +157,7 @@ impl SSHSession {
         let pkey = public_key.trim();
 
         if !self.file_contains(&auth_key, pkey).await? {
-            debug!("public key not found in authorized_keys, skipping");
+            debug!("public key not found in authorized_keys, nothing to revoke");
             return Ok(());
         }
 
@@ -195,7 +195,7 @@ impl SSHSession {
         file.flush().await?;
         file.shutdown().await?;
 
-        debug!(local = local_path, remote = remote_path, "scp upload success");
+        debug!(local = local_path, remote = remote_path, "upload complete");
         Ok(())
     }
 
@@ -218,7 +218,7 @@ impl SSHSession {
 
         tokio::fs::write(&local_path, data).await?;
 
-        debug!(local = local_path, remote = remote_path, "scp download success");
+        debug!(local = local_path, remote = remote_path, "download complete");
         Ok(())
     }
 
@@ -249,7 +249,7 @@ impl SSHSession {
         cmd: Option<&str>,
         check_exit_status: bool,
     ) -> Result<()> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncWriteExt;
         use tokio::sync::mpsc;
 
         let mut channel = self.session.channel_open_session().await?;
@@ -272,17 +272,21 @@ impl SSHSession {
         }
 
         let (tx, mut rx) = mpsc::channel::<Vec<u8>>(32);
-        let mut stdin = tokio::io::stdin();
         let mut stdout = tokio::io::stdout();
         let mut stdin_closed = false;
 
-        tokio::spawn(async move {
-            let mut buf = vec![0u8; 4096];
+        // Use a detached blocking thread for stdin to avoid the tokio blocking
+        // pool lingering after the remote session ends.
+        let stdin_tx = tx.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut handle = std::io::stdin().lock();
+            let mut buf = [0u8; 4096];
             loop {
-                match stdin.read(&mut buf).await {
+                match handle.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
-                        if tx.send(buf[..n].to_vec()).await.is_err() {
+                        if stdin_tx.blocking_send(buf[..n].to_vec()).is_err() {
                             break;
                         }
                     }
@@ -327,9 +331,13 @@ impl SSHSession {
             }
         }
 
+        // Cancel the stdin reader before returning, otherwise the process can
+        // hang waiting for one more keypress after the remote shell exits.
+        debug!("pty loop exited, disconnecting session");
         self.session
             .disconnect(Disconnect::ByApplication, "Session ended", "en")
             .await?;
+        debug!("session disconnected");
 
         if check_exit_status && exit_status != 0 {
             return Err(AtshError::Ssh(russh::Error::from(std::io::Error::new(

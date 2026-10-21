@@ -55,7 +55,7 @@ pub fn encrypt(data: impl AsRef<str>, key: Option<&str>) -> Result<String> {
             Ok(general_purpose::STANDARD_NO_PAD.encode(obsf))
         }
         None => {
-            tracing::warn!("encrypt called without ATSH_KEY — storing plaintext");
+            tracing::warn!("encrypt called without ATSH_KEY - storing plaintext");
             Ok(data.to_string())
         }
     }
