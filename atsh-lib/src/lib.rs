@@ -1,35 +1,34 @@
 mod config;
 mod connection;
+mod context;
 mod error;
 mod storage;
 
+pub use context::AppContext;
 pub use error::{AtshError, Result};
 
 pub mod atsh {
     use std::path::Path;
-
     use tracing::debug;
 
-    use crate::config::CONFIG;
-    use crate::connection::{Remote as RemoteType, RemoteDisplay, Remotes};
+    use crate::connection::{Remote, RemoteDisplay, Remotes};
     use crate::connection::SSHSession;
+    use crate::context::AppContext;
     use crate::error::{AtshError, Result};
     use crate::storage::log::setup_logging;
 
-    pub use crate::config::CONFIG as Config;
-    pub use crate::connection::Remote;
-
-    pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<()> {
-        if let Some(p) = work_dir {
-            CONFIG.set_work_dir(p)?;
-        }
-        let w = CONFIG.get_work_dir();
-        setup_logging(w)?;
-        debug!("success initialize at {:?}", w);
-        Ok(())
+    pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<AppContext> {
+        let ctx = match work_dir {
+            Some(p) => AppContext::new(p)?,
+            None => AppContext::default(),
+        };
+        setup_logging(ctx.work_dir())?;
+        debug!("success initialize at {:?}", ctx.work_dir());
+        Ok(ctx)
     }
 
     pub fn add(
+        ctx: &AppContext,
         user: &str,
         password: &str,
         ip: &str,
@@ -37,11 +36,12 @@ pub mod atsh {
         name: &Option<impl AsRef<str>>,
         note: &Option<impl AsRef<str>>,
     ) -> Result<usize> {
-        Remotes::add(user, password, ip, port, name, note)
+        Remotes::add(ctx, user, password, ip, port, name, note)
     }
 
-    pub fn add_remote(remote: &RemoteType) -> Result<usize> {
+    pub fn add_remote(ctx: &AppContext, remote: &Remote) -> Result<usize> {
         add(
+            ctx,
             &remote.user,
             &remote.password,
             &remote.ip,
@@ -51,35 +51,35 @@ pub mod atsh {
         )
     }
 
-    pub async fn remove(index: &[usize]) -> Result<usize> {
-        Remotes::delete(index).await
+    pub async fn remove(ctx: &AppContext, index: &[usize]) -> Result<usize> {
+        Remotes::delete(ctx, index).await
     }
 
-    pub fn get(index: usize) -> Result<Option<RemoteType>> {
-        Remotes::get(index)
+    pub fn get(ctx: &AppContext, index: usize) -> Result<Option<Remote>> {
+        Remotes::get(ctx, index)
     }
 
-    pub fn try_get(index: usize) -> Result<RemoteType> {
-        Remotes::try_get(index)
+    pub fn try_get(ctx: &AppContext, index: usize) -> Result<Remote> {
+        Remotes::try_get(ctx, index)
     }
 
-    pub fn get_all() -> Result<Vec<RemoteType>> {
-        let remotes = Remotes::get_all()?;
+    pub fn get_all(ctx: &AppContext) -> Result<Vec<Remote>> {
+        let remotes = Remotes::get_all(ctx)?;
         Ok(remotes.0)
     }
 
-    pub fn pprint(all: bool) -> Result<()> {
-        let remotes = Remotes::get_all()?;
-        RemoteDisplay::pprint(&remotes.0, all);
+    pub fn pprint(ctx: &AppContext, all: bool) -> Result<()> {
+        let remotes = Remotes::get_all(ctx)?;
+        RemoteDisplay::pprint(ctx, &remotes.0, all);
         Ok(())
     }
 
-    pub async fn login(index: usize, auth: bool) -> Result<()> {
-        let remote = Remotes::try_get(index)?;
-        remote.login(auth).await
+    pub async fn login(ctx: &AppContext, index: usize, auth: bool) -> Result<()> {
+        let remote = Remotes::try_get(ctx, index)?;
+        remote.login(ctx, auth).await
     }
 
-    pub async fn upload(index: usize, path: &[impl AsRef<str>]) -> Result<()> {
+    pub async fn upload(ctx: &AppContext, index: usize, path: &[impl AsRef<str>]) -> Result<()> {
         if path.len() != 2 {
             return Err(AtshError::InvalidInput(
                 "path format error, like `upload -p /local/path /remote/path`".into(),
@@ -89,20 +89,21 @@ pub mod atsh {
         if !Path::new(local).exists() {
             return Err(AtshError::InvalidInput("the upload file not found".into()));
         }
-        Remotes::try_get(index)?.upload(local, remote).await
+        Remotes::try_get(ctx, index)?.upload(ctx, local, remote).await
     }
 
-    pub async fn download(index: usize, path: &[impl AsRef<str>]) -> Result<()> {
+    pub async fn download(ctx: &AppContext, index: usize, path: &[impl AsRef<str>]) -> Result<()> {
         if path.len() != 2 {
             return Err(AtshError::InvalidInput(
                 "path format error, like `download -p /remote/path /local/path`".into(),
             ));
         }
         let (remote, local) = (path[0].as_ref(), path[1].as_ref());
-        Remotes::try_get(index)?.download(remote, local).await
+        Remotes::try_get(ctx, index)?.download(ctx, remote, local).await
     }
 
     pub async fn run_command(
+        ctx: &AppContext,
         index: Option<usize>,
         user: Option<&str>,
         password: Option<&str>,
@@ -112,8 +113,8 @@ pub mod atsh {
         _wh: (Option<u32>, Option<u32>),
     ) -> Result<()> {
         if let Some(i) = index {
-            let remote = Remotes::try_get(i)?;
-            return remote.run_command(cmd).await;
+            let remote = Remotes::try_get(ctx, i)?;
+            return remote.run_command(ctx, cmd).await;
         }
 
         let mut session = SSHSession::new(

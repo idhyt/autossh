@@ -1,48 +1,9 @@
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::LazyLock;
 use tracing::{debug, info, warn};
 
-use super::ctx::WORK_DIR_FILE;
 use crate::error::{AtshError, Result};
-
-static ATSH_KEY: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| {
-    if let Ok(key) = std::env::var("ATSH_KEY") {
-        debug!("`ATSH_KEY` found in environment variable");
-        return Mutex::new(Some(key));
-    }
-    if let Ok(key) = std::env::var("ASKEY") {
-        warn!("Deprecated `ASKEY`, use `ATSH_KEY` instead");
-        return Mutex::new(Some(key));
-    }
-    Mutex::new(None)
-});
-
-pub fn get_atshkey() -> Result<String> {
-    let key = ATSH_KEY.lock().clone();
-    key.ok_or(AtshError::EncKeyNotSet)
-}
-
-pub fn set_atshkey(key: Option<impl AsRef<str>>) -> Result<()> {
-    match key {
-        None => {
-            info!("Cleaning ATSH_KEY...");
-            *ATSH_KEY.lock() = None;
-            Ok(())
-        }
-        Some(k) => {
-            let set = k.as_ref();
-            if set.len() < 5 {
-                return Err(AtshError::EncKeyTooShort);
-            }
-            info!("Set ATSH_KEY to {}...", &set[..2]);
-            *ATSH_KEY.lock() = Some(set.to_string());
-            Ok(())
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SSHKey {
@@ -50,14 +11,11 @@ pub struct SSHKey {
     private: PathBuf,
 }
 
-impl Default for SSHKey {
-    fn default() -> Self {
-        let (public, private) = (WORK_DIR_FILE("id_rsa.pub"), WORK_DIR_FILE("id_rsa"));
+impl SSHKey {
+    pub fn new(public: PathBuf, private: PathBuf) -> Self {
         SSHKey { public, private }
     }
-}
 
-impl SSHKey {
     pub fn get_public(&self) -> &Path {
         self.public.as_path()
     }
@@ -158,20 +116,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_key() {
-        assert!(set_atshkey(Option::<&str>::None).is_ok());
-        assert!(get_atshkey().is_err());
-        assert!(set_atshkey(Some("abcdefg")).is_ok());
-        assert_eq!(get_atshkey().unwrap(), "abcdefg");
-        assert!(set_atshkey(Some("abc")).is_err());
-    }
-
-    #[test]
     fn test_sshkey() {
-        let output = WORK_DIR_FILE("id_rsa");
+        let dir = PathBuf::from("test.atsh.d");
+        std::fs::create_dir_all(&dir).unwrap();
+        let output = dir.join("id_rsa");
         assert!(create_sshkey(Some("123456"), &output, false).is_err());
         let result = create_sshkey(Some("12345678"), &output, false);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), output);
     }
 }

@@ -2,9 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing::error;
 
-use atsh_lib::atsh::{
-    add, download, initialize, login, pprint, remove, run_command, upload, Config,
-};
+use atsh_lib::atsh::{add, download, initialize, login, pprint, remove, run_command, upload};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -108,7 +106,8 @@ enum Commands {
 #[clap(
     author = "idhyt",
     version = env!("BUILD_VERSION"),
-    about = "atsh - SSH connection manager with automatic passwordless login"
+    about = "atsh - SSH connection manager with automatic passwordless login",
+    arg_required_else_help = true,
 )]
 struct Cli {
     #[command(subcommand)]
@@ -118,10 +117,17 @@ struct Cli {
 #[tokio::main]
 async fn main() {
     let args = Cli::parse();
-    initialize(Option::<&str>::None).expect("initialize failed");
+
+    let ctx = match initialize(Option::<&str>::None) {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            error!(error = %e, "initialize failed");
+            std::process::exit(1);
+        }
+    };
 
     let result = match &args.command {
-        Some(Commands::List { all }) => pprint(*all),
+        Some(Commands::List { all }) => pprint(&ctx, *all),
         Some(Commands::Add {
             user,
             ip,
@@ -130,23 +136,24 @@ async fn main() {
             note,
         }) => {
             let password = read_password_interactive().expect("failed to read password");
-            match add(user, &password, ip, *port, name, note) {
-                Ok(_) => pprint(false),
+            match add(&ctx, user, &password, ip, *port, name, note) {
+                Ok(_) => pprint(&ctx, false),
                 Err(e) => Err(e),
             }
         }
-        Some(Commands::Remove { index }) => match remove(index).await {
-            Ok(_) => pprint(false),
+        Some(Commands::Remove { index }) => match remove(&ctx, index).await {
+            Ok(_) => pprint(&ctx, false),
             Err(e) => Err(e),
         },
-        Some(Commands::Login { index, auth }) => login(*index, *auth).await,
-        Some(Commands::Upload { index, path }) => upload(*index, path).await,
-        Some(Commands::Download { index, path }) => download(*index, path).await,
+        Some(Commands::Login { index, auth }) => login(&ctx, *index, *auth).await,
+        Some(Commands::Upload { index, path }) => upload(&ctx, *index, path).await,
+        Some(Commands::Download { index, path }) => download(&ctx, *index, path).await,
         Some(Commands::SshKeygen {
             password,
             output,
             silent,
-        }) => Config
+        }) => ctx
+            .config()
             .create_sshkey(password.as_deref(), output.as_deref(), !*silent)
             .map(|_| ()),
         Some(Commands::Command {
@@ -162,6 +169,7 @@ async fn main() {
                 None
             };
             run_command(
+                &ctx,
                 *index,
                 user.as_deref(),
                 password.as_deref(),
@@ -172,14 +180,16 @@ async fn main() {
             )
             .await
         }
-        None => pprint(false),
+        None => {
+            // unreachable due to arg_required_else_help, but clap still needs the arm
+            pprint(&ctx, false)
+        }
     };
 
     if let Err(e) = result {
         error!(error = %e, "Run command failed");
         std::process::exit(1);
     }
-    std::process::exit(0);
 }
 
 fn read_password_interactive() -> std::io::Result<String> {

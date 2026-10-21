@@ -228,6 +228,27 @@ impl SSHSession {
         height: u32,
         cmd: Option<&str>,
     ) -> Result<()> {
+        self.run_pty(width, height, cmd, true).await
+    }
+
+    pub async fn interactive_login_shell(&mut self) -> Result<()> {
+        let (width, height) = term_size::dimensions().unwrap_or((80, 24));
+        self.run_pty(width as u32, height as u32, None, false)
+            .await
+    }
+
+    /// Shared PTY-based bidirectional I/O loop.
+    ///
+    /// Opens a PTY, optionally executes a command (or requests a shell),
+    /// then pumps stdin -> channel and channel -> stdout until exit.
+    /// When `check_exit_status` is true, a non-zero exit status becomes an error.
+    async fn run_pty(
+        &mut self,
+        width: u32,
+        height: u32,
+        cmd: Option<&str>,
+        check_exit_status: bool,
+    ) -> Result<()> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::sync::mpsc;
 
@@ -310,94 +331,12 @@ impl SSHSession {
             .disconnect(Disconnect::ByApplication, "Session ended", "en")
             .await?;
 
-        if exit_status != 0 {
-            return Err(AtshError::Ssh(russh::Error::from(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("exit status: {}", exit_status),
-                ),
-            )));
+        if check_exit_status && exit_status != 0 {
+            return Err(AtshError::Ssh(russh::Error::from(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("exit status: {}", exit_status),
+            ))));
         }
-        Ok(())
-    }
-
-    pub async fn interactive_login_shell(&mut self) -> Result<()> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        use tokio::sync::mpsc;
-
-        let term_size = term_size::dimensions().unwrap_or((80, 24));
-        let mut channel = self.session.channel_open_session().await?;
-        channel
-            .request_pty(
-                true,
-                &std::env::var("TERM").unwrap_or_else(|_| "xterm".into()),
-                term_size.0 as u32,
-                term_size.1 as u32,
-                0,
-                0,
-                &[],
-            )
-            .await?;
-
-        channel.request_shell(true).await?;
-
-        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(32);
-        let mut stdin = tokio::io::stdin();
-        let mut stdout = tokio::io::stdout();
-        let mut stdin_closed = false;
-
-        tokio::spawn(async move {
-            let mut buf = vec![0u8; 4096];
-            loop {
-                match stdin.read(&mut buf).await {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        if tx.send(buf[..n].to_vec()).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-
-        loop {
-            tokio::select! {
-                data = rx.recv() => {
-                    match data {
-                        Some(buf) => {
-                            channel.data(&mut std::io::Cursor::new(&buf[..])).await?;
-                        }
-                        None => {
-                            if !stdin_closed {
-                                stdin_closed = true;
-                                channel.eof().await?;
-                            }
-                        }
-                    }
-                }
-                msg = channel.wait() => {
-                    match msg {
-                        Some(ChannelMsg::Data { data }) => {
-                            stdout.write_all(&data).await?;
-                            stdout.flush().await?;
-                        }
-                        Some(ChannelMsg::ExitStatus { .. }) => {
-                            if !stdin_closed {
-                                channel.eof().await?;
-                            }
-                            break;
-                        }
-                        None => break,
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        self.session
-            .disconnect(Disconnect::ByApplication, "Session ended", "en")
-            .await?;
         Ok(())
     }
 }

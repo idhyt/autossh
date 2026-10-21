@@ -1,34 +1,36 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use tracing::{debug, warn};
 
-use super::ctx::{get_work_dir, set_work_dir, WORK_DIR_FILE};
-use super::key::{create_sshkey, get_atshkey, set_atshkey, SSHKey};
+use super::key::{create_sshkey, SSHKey};
 use crate::error::Result;
 
-pub static CONFIG: LazyLock<Config> = LazyLock::new(|| Config::new());
-
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub sshkey: SSHKey,
 }
 
 impl Config {
-    pub fn new() -> Self {
-        let config = WORK_DIR_FILE("config.toml");
-        if !config.is_file() {
-            let default_toml =
-                toml::to_string(&Config::default()).expect("Failed to serialize config");
-            std::fs::write(&config, default_toml).expect("Failed to write config.toml");
+    /// Load config from the work directory, writing a default if missing.
+    pub fn load_or_default(work_dir: &Path) -> Result<Self> {
+        let file = work_dir.join("config.toml");
+        if !file.is_file() {
+            let default = Config::default_for(work_dir);
+            let toml = toml::to_string(&default).expect("Failed to serialize config");
+            std::fs::write(&file, toml)?;
         }
-        Self::load_from_file(config.as_path())
+        debug!(file = ?file, "Loading config");
+        let content = std::fs::read_to_string(&file)?;
+        Ok(toml::from_str(&content).expect("Failed to parse config.toml"))
     }
 
-    pub fn load_from_file(f: &Path) -> Self {
-        debug!(file = ?f, "Loading config");
-        let content = std::fs::read_to_string(f).expect("Failed to read config.toml");
-        toml::from_str(&content).expect("Failed to parse config.toml")
+    fn default_for(work_dir: &Path) -> Self {
+        Config {
+            sshkey: SSHKey::new(
+                work_dir.join("id_rsa.pub"),
+                work_dir.join("id_rsa"),
+            ),
+        }
     }
 
     pub fn get_public(&self) -> &Path {
@@ -54,26 +56,6 @@ impl Config {
 
     pub fn read_private(&self) -> Result<String> {
         self.sshkey.read_private()
-    }
-
-    pub fn get_enc_key(&self) -> Result<String> {
-        get_atshkey()
-    }
-
-    pub fn set_enc_key(&self, key: Option<impl AsRef<str>>) -> Result<()> {
-        set_atshkey(key)
-    }
-
-    pub fn get_work_dir(&self) -> &Path {
-        get_work_dir()
-    }
-
-    pub fn set_work_dir(&self, dir: impl AsRef<Path>) -> Result<()> {
-        set_work_dir(dir)
-    }
-
-    pub fn work_dir_file(&self, n: &str) -> PathBuf {
-        WORK_DIR_FILE(n)
     }
 
     pub fn create_sshkey(

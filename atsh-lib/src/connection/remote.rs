@@ -1,45 +1,21 @@
 use prettytable::{Cell, Row, Table};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::rssh::SSHSession;
-use crate::config::CONFIG;
+use crate::context::AppContext;
 use crate::error::{AtshError, Result};
-use crate::storage::db::{
-    delete_index, get_connection, insert, query_all, query_index, update_authorized,
-};
-use crate::storage::secure::{decrypt, encrypt};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Remote {
     pub index: usize,
     pub user: String,
-    #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
     pub ip: String,
     pub port: u16,
     pub authorized: bool,
     pub name: Option<String>,
     pub note: Option<String>,
-}
-
-fn depass<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let password = String::deserialize(deserializer)?;
-    Ok(decrypt(&password).unwrap_or(password))
-}
-
-fn enpass<S>(
-    password: &String,
-    serializer: S,
-) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let encrypted = encrypt(password).unwrap_or_else(|_| password.clone());
-    Serialize::serialize(&encrypted, serializer)
 }
 
 impl std::fmt::Display for Remote {
@@ -53,101 +29,93 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
-    pub fn save(&self) -> Result<usize> {
-        CONFIG.get_enc_key()?;
+    pub fn save(&self, ctx: &AppContext) -> Result<usize> {
+        ctx.require_enc_key()?;
+        let enc = ctx.encrypt_password(&self.password)?;
         let n = {
-            let conn = get_connection().lock();
-            insert(&conn, self)?
+            let db = ctx.db().lock();
+            db.insert(self, &enc)?
         };
         info!(remote = self.to_string(), "success add record");
         Ok(n)
     }
 
-    pub fn delete_from_db(&self) -> Result<()> {
-        let conn = get_connection().lock();
-        delete_index(&conn, self.index)?;
+    pub fn delete_from_db(&self, ctx: &AppContext) -> Result<()> {
+        let db = ctx.db().lock();
+        db.delete_index(self.index)?;
         info!(remote = self.to_string(), "success delete record");
         Ok(())
     }
 
-    pub async fn authorize_public_key(&self) -> Result<()> {
-        CONFIG.get_enc_key()?;
-        let mut session =
-            SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
-        let pub_key = CONFIG.read_public().map_err(|e| AtshError::Config(e.to_string()))?;
+    /// Authorize the public key on the remote, returning the password session
+    /// so callers can reuse the connection instead of reconnecting.
+    pub async fn authorize_public_key(&self, ctx: &AppContext) -> Result<()> {
+        let password = &self.password;
+        let mut session = SSHSession::new(&self.user, password, &self.ip, self.port).await?;
+        let pub_key = ctx.config().read_public()?;
         session.authenticate(pub_key.as_str()).await?;
         if !self.authorized {
-            let conn = get_connection().lock();
-            update_authorized(&conn, self.index, true)?;
+            let db = ctx.db().lock();
+            db.update_authorized(self.index, true)?;
         }
         info!(remote = self.to_string(), "success add authenticate");
         Ok(())
     }
 
-    pub async fn deauthorize_public_key(&self) -> Result<()> {
-        CONFIG.get_enc_key()?;
+    pub async fn deauthorize_public_key(&self, ctx: &AppContext) -> Result<()> {
         let mut session =
             SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
-        let pub_key = CONFIG.read_public().map_err(|e| AtshError::Config(e.to_string()))?;
+        let pub_key = ctx.config().read_public()?;
         session.revoke(pub_key.as_str()).await?;
         info!(remote = self.to_string(), "success remove authenticate");
         Ok(())
     }
 
-    pub async fn login(&self, reauth: bool) -> Result<()> {
-        if !self.authorized || reauth {
-            self.authorize_public_key().await?;
-        }
-        let private_key_path = CONFIG
+    fn private_key_path<'a>(&self, ctx: &'a AppContext) -> Result<&'a str> {
+        ctx.config()
             .get_private()
             .to_str()
-            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))
+    }
+
+    pub async fn login(&self, ctx: &AppContext, reauth: bool) -> Result<()> {
+        if !self.authorized || reauth {
+            self.authorize_public_key(ctx).await?;
+        }
+        let key_path = self.private_key_path(ctx)?;
         let mut session =
-            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
-                .await?;
+            SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.interactive_login_shell().await?;
         info!(remote = self.to_string(), "success login");
         Ok(())
     }
 
-    pub async fn upload(&self, from: &str, to: &str) -> Result<()> {
+    pub async fn upload(&self, ctx: &AppContext, from: &str, to: &str) -> Result<()> {
         if !self.authorized {
             debug!(remote = self.to_string(), "no authorized, try authenticate");
-            self.authorize_public_key().await?;
+            self.authorize_public_key(ctx).await?;
         }
-        let private_key_path = CONFIG
-            .get_private()
-            .to_str()
-            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+        let key_path = self.private_key_path(ctx)?;
         let mut session =
-            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
-                .await?;
+            SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.scp_upload(from, to).await?;
         info!(from = from, to = to, "success upload");
         Ok(())
     }
 
-    pub async fn download(&self, from: &str, to: &str) -> Result<()> {
-        let private_key_path = CONFIG
-            .get_private()
-            .to_str()
-            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+    pub async fn download(&self, ctx: &AppContext, from: &str, to: &str) -> Result<()> {
+        let key_path = self.private_key_path(ctx)?;
         let mut session =
-            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
-                .await?;
+            SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.scp_download(from, to).await?;
         info!(from = from, to = to, "success download");
         Ok(())
     }
 
-    pub async fn run_command(&self, cmd: Option<&str>) -> Result<()> {
-        let private_key_path = CONFIG
-            .get_private()
-            .to_str()
-            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+    pub async fn run_command(&self, ctx: &AppContext, cmd: Option<&str>) -> Result<()> {
+        let key_path = self.private_key_path(ctx)?;
         let mut session =
-            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
-                .await?;
+            SSHSession::connect_with_key(&self.user, key_path, &self.ip, self.port).await?;
         session.interactive_shell(80, 24, cmd).await?;
         Ok(())
     }
@@ -156,15 +124,15 @@ impl Remote {
 pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {
-    fn load() -> Result<Remotes> {
-        let conn = get_connection().lock();
-        let remotes = query_all(&conn)?;
+    fn load(ctx: &AppContext) -> Result<Remotes> {
+        let db = ctx.db().lock();
+        let remotes = db.query_all(|enc| ctx.decrypt_password(enc))?;
         Ok(Remotes(remotes))
     }
 
-    pub fn get(idx: usize) -> Result<Option<Remote>> {
-        let conn = get_connection().lock();
-        let remote = query_index(&conn, idx)?;
+    pub fn get(ctx: &AppContext, idx: usize) -> Result<Option<Remote>> {
+        let db = ctx.db().lock();
+        let remote = db.query_index(idx, |enc| ctx.decrypt_password(enc))?;
         if remote.is_some() {
             info!(index = idx, "success get remote");
         } else {
@@ -173,17 +141,18 @@ impl Remotes {
         Ok(remote)
     }
 
-    pub fn try_get(idx: usize) -> Result<Remote> {
-        Remotes::get(idx)?.ok_or(AtshError::RemoteNotFound { index: idx })
+    pub fn try_get(ctx: &AppContext, idx: usize) -> Result<Remote> {
+        Remotes::get(ctx, idx)?.ok_or(AtshError::RemoteNotFound { index: idx })
     }
 
-    pub fn get_all() -> Result<Remotes> {
-        let remotes = Remotes::load()?;
+    pub fn get_all(ctx: &AppContext) -> Result<Remotes> {
+        let remotes = Remotes::load(ctx)?;
         info!("success get all remotes {}", remotes.0.len());
         Ok(remotes)
     }
 
     pub fn add(
+        ctx: &AppContext,
         user: &str,
         password: &str,
         ip: &str,
@@ -201,25 +170,25 @@ impl Remotes {
             name: name.as_ref().map(|n| n.as_ref().to_string()),
             note: note.as_ref().map(|n| n.as_ref().to_string()),
         };
-        remote.save()
+        remote.save(ctx)
     }
 
-    pub async fn delete(indexs: &[usize]) -> Result<usize> {
+    pub async fn delete(ctx: &AppContext, indexs: &[usize]) -> Result<usize> {
         let remotes: Vec<Remote> = indexs
             .iter()
             .collect::<std::collections::HashSet<_>>()
             .iter()
-            .filter_map(|&idx| Remotes::get(*idx).transpose())
+            .filter_map(|&idx| Remotes::get(ctx, *idx).transpose())
             .collect::<std::result::Result<Vec<_>, _>>()?;
         debug!(total = remotes.len(), "delete");
         for remote in remotes.iter() {
             debug!(index = remote.index, "delete");
             if remote.authorized {
-                if let Err(e) = remote.deauthorize_public_key().await {
+                if let Err(e) = remote.deauthorize_public_key(ctx).await {
                     warn!("failed to revoke auth for remote {}: {}", remote, e);
                 }
             }
-            remote.delete_from_db()?;
+            remote.delete_from_db(ctx)?;
         }
         Ok(remotes.len())
     }
@@ -228,7 +197,7 @@ impl Remotes {
 pub struct RemoteDisplay;
 
 impl RemoteDisplay {
-    pub fn pprint(remotes: &[Remote], all: bool) {
+    pub fn pprint(ctx: &AppContext, remotes: &[Remote], all: bool) {
         let mut table = Table::new();
         let mut titles = vec!["index", "name", "user", "ip", "port"];
         if all {
@@ -243,6 +212,7 @@ impl RemoteDisplay {
                 .collect::<Vec<Cell>>(),
         ));
 
+        let has_key = ctx.enc_key().is_some();
         for remote in remotes {
             let mut row = vec![
                 remote.index.to_string(),
@@ -252,7 +222,7 @@ impl RemoteDisplay {
                 remote.port.to_string(),
             ];
             if all {
-                let pwd_display = if CONFIG.get_enc_key().is_ok() {
+                let pwd_display = if has_key {
                     remote.password.clone()
                 } else if remote.password.len() > 8 {
                     format!(
