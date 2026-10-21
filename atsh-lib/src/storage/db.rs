@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection};
 use std::path::Path;
 use std::sync::OnceLock;
 use tracing::{debug, warn};
@@ -7,6 +7,7 @@ use tracing::{debug, warn};
 use super::secure::{decrypt, encrypt};
 use crate::config::CONFIG;
 use crate::connection::Remote;
+use crate::error::Result;
 
 static DATABASE: OnceLock<Mutex<Connection>> = OnceLock::new();
 
@@ -21,40 +22,38 @@ fn db_init(p: &Path) -> Result<Connection> {
         warn!(file=?p, "Loading Database not found and new one");
     }
     let conn = Connection::open(p)?;
-    // 创建表（如果不存在）
     conn.execute(
         "CREATE TABLE IF NOT EXISTS records (
-            idx INTEGER PRIMARY KEY AUTOINCREMENT,  -- 使用 PRIMARY KEY 自动隐含 UNIQUE
+            idx INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT NOT NULL,
             password TEXT NOT NULL,
             ip TEXT NOT NULL,
             port INTEGER NOT NULL,
             authorized BOOLEAN NOT NULL,
             name TEXT,
-            note TEXT,
-            UNIQUE(idx)  -- 显式声明唯一索引
+            note TEXT
         )",
-        [], // 无参数
+        [],
     )?;
-    // 创建索引
-    // conn.execute("CREATE INDEX IF NOT EXISTS idx_remote ON records (idx)", [])?;
     Ok(conn)
 }
 
 pub(crate) fn insert(conn: &Connection, remote: &Remote) -> Result<usize> {
-    conn.execute(
+    let enc = encrypt(&remote.password)?;
+    let n = conn.execute(
         "INSERT INTO records (user, password, ip, port, authorized, name, note)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             remote.user,
-            encrypt(&remote.password),
+            enc,
             remote.ip,
             remote.port,
             remote.authorized,
             remote.name,
             remote.note,
         ],
-    )
+    )?;
+    Ok(n)
 }
 
 pub(crate) fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote>> {
@@ -64,10 +63,17 @@ pub(crate) fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote
          WHERE idx = ?1",
     )?;
     let result = stmt.query_row([idx as i32], |row| {
+        let enc_password: String = row.get("password")?;
         Ok(Remote {
             index: row.get::<_, i32>("idx")? as usize,
             user: row.get("user")?,
-            password: decrypt(&row.get::<_, String>("password")?),
+            password: decrypt(&enc_password).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    enc_password.len(),
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?,
             ip: row.get("ip")?,
             port: row.get("port")?,
             authorized: row.get("authorized")?,
@@ -78,7 +84,7 @@ pub(crate) fn query_index(conn: &Connection, idx: usize) -> Result<Option<Remote
     match result {
         Ok(remote) => Ok(Some(remote)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -86,33 +92,41 @@ pub(crate) fn query_all(conn: &Connection) -> Result<Vec<Remote>> {
     let mut stmt = conn.prepare("SELECT * FROM records")?;
     let records = stmt
         .query_map([], |row| {
+            let enc_password: String = row.get("password")?;
             Ok(Remote {
                 index: row.get::<_, i32>("idx")? as usize,
                 user: row.get("user")?,
-                password: decrypt(&row.get::<_, String>("password")?),
-                authorized: row.get("authorized")?,
+                password: decrypt(&enc_password).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        enc_password.len(),
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
                 ip: row.get("ip")?,
                 port: row.get("port")?,
+                authorized: row.get("authorized")?,
                 name: row.get("name")?,
                 note: row.get("note")?,
             })
         })?
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(records)
 }
 
 pub(crate) fn delete_index(conn: &Connection, idx: usize) -> Result<usize> {
-    conn.execute("DELETE FROM records WHERE idx = ?", [idx as i32])
+    let n = conn.execute("DELETE FROM records WHERE idx = ?", [idx as i32])?;
+    Ok(n)
 }
 
 pub(crate) fn update_authorized(conn: &Connection, idx: usize, authorized: bool) -> Result<usize> {
-    conn.execute(
+    let n = conn.execute(
         "UPDATE records SET authorized = ?1 WHERE idx = ?2",
         (authorized, idx as i32),
-    )
+    )?;
+    Ok(n)
 }
 
-// test
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,100 +139,69 @@ mod tests {
             index: 1,
             user: "user".to_string(),
             password: "password".to_string(),
-            authorized: false,
             ip: "1.2.3.4".to_string(),
             port: 2222,
+            authorized: false,
             name: Some("name".to_string()),
             note: None,
         };
-        // init
-        // crate::atsh::initialize(Option::<&str>::None).unwrap();
-        // unsafe {std::env::set_var("ASKEY", "test");}
-        // let enc_pwd = "HlT+Q0TYYpCrZNKfwM+Kg3VU3rE5hJ9jtohcGG0nU7qq2UOq";
-        // let db_path = WORK_DIR_FILE("atsh.db");
 
-        // clean
-        {
-            if db_path.is_file() {
-                println!("remove exist database: {:?}", db_path);
-                std::fs::remove_file(&db_path).unwrap();
-            }
+        if db_path.is_file() {
+            std::fs::remove_file(&db_path).unwrap();
         }
 
-        // test insert 2
         {
             let conn = get_connection().lock();
-            println!("conn: {:#?}", conn);
-            let n = insert(&conn, &remote);
-            assert!(n.is_ok());
-            assert_eq!(n.unwrap(), 1);
+            let n = insert(&conn, &remote).unwrap();
+            assert_eq!(n, 1);
             insert(&conn, &remote).unwrap();
         }
 
-        // update auth
         {
             {
                 let conn = get_connection().lock();
-                let n = update_authorized(&conn, 1, true);
-                assert!(n.is_ok());
-                assert_eq!(n.unwrap(), 1);
+                let n = update_authorized(&conn, 1, true).unwrap();
+                assert_eq!(n, 1);
             }
             let conn = get_connection().lock();
-            let one = query_index(&conn, 1);
-            assert!(one.is_ok());
-            let one = one.unwrap().unwrap();
+            let one = query_index(&conn, 1).unwrap().unwrap();
             assert_eq!(one.authorized, true);
         }
 
-        // test query all
         let exist_idx = {
             let conn = get_connection().lock();
-            let all = query_all(&conn);
-            println!("all: {:#?}", all);
-            assert!(all.is_ok());
-            let all = all.unwrap();
+            let all = query_all(&conn).unwrap();
             assert_eq!(all.len(), 2);
             all.iter().map(|r| r.index).collect::<Vec<_>>()
         };
-        // test query by index
+
         {
             let conn = get_connection().lock();
-            let one = query_index(&conn, exist_idx[0]);
-            println!("one: {:#?}", one);
-            assert!(one.is_ok());
-            let one = one.unwrap();
-            assert!(one.is_some());
-            let one = one.unwrap();
-            assert!(one.index == remote.index);
-            assert!(one.user == remote.user);
-            assert!(one.password == remote.password);
-            assert!(one.ip == remote.ip);
-            assert!(one.port == remote.port);
-            assert!(one.name == remote.name);
-            assert!(one.note == remote.note);
+            let one = query_index(&conn, exist_idx[0]).unwrap().unwrap();
+            assert_eq!(one.index, remote.index);
+            assert_eq!(one.user, remote.user);
+            assert_eq!(one.password, remote.password);
+            assert_eq!(one.ip, remote.ip);
+            assert_eq!(one.port, remote.port);
+            assert_eq!(one.name, remote.name);
+            assert_eq!(one.note, remote.note);
         }
 
-        // delete one
         {
             let conn = get_connection().lock();
-            let n = delete_index(&conn, exist_idx[0]);
-            println!("delete: {:#?}", n);
-            assert!(n.is_ok());
-            assert_eq!(n.unwrap(), 1);
+            let n = delete_index(&conn, exist_idx[0]).unwrap();
+            assert_eq!(n, 1);
         }
 
-        // now we add one again
         {
             let conn = get_connection().lock();
-            let n = insert(&conn, &remote);
-            assert_eq!(n.unwrap(), 1);
-            // wo query all
+            let n = insert(&conn, &remote).unwrap();
+            assert_eq!(n, 1);
             let new_index = query_all(&conn)
                 .unwrap()
                 .iter()
                 .map(|r| r.index)
                 .collect::<Vec<usize>>();
-            println!("exist index: {:#?}", new_index);
             assert_eq!(new_index.len(), 2);
             assert_ne!(new_index, exist_idx);
             assert_eq!(new_index[0], exist_idx[1]);

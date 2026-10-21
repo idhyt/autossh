@@ -1,39 +1,25 @@
 use prettytable::{Cell, Row, Table};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::io::Error;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::net::TcpStream;
-use tokio::process::Command;
-use tokio::time::Duration;
 use tracing::{debug, info, warn};
 
 use super::rssh::SSHSession;
 use crate::config::CONFIG;
+use crate::error::{AtshError, Result};
 use crate::storage::db::{
     delete_index, get_connection, insert, query_all, query_index, update_authorized,
 };
 use crate::storage::secure::{decrypt, encrypt};
-use crate::Result;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Remote {
-    /// the index of the remote server.
-    // #[serde(rename = "idx")]
     pub index: usize,
-    /// the login user.
     pub user: String,
-    /// the login password.
     #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
-    /// the login id address.
     pub ip: String,
-    /// the login port.
     pub port: u16,
-    /// have the authorized to login.
     pub authorized: bool,
-    /// the alias name for the login.
     pub name: Option<String>,
-    /// the note for the server.
     pub note: Option<String>,
 }
 
@@ -42,54 +28,55 @@ where
     D: Deserializer<'de>,
 {
     let password = String::deserialize(deserializer)?;
-    Ok(decrypt(&password))
+    Ok(decrypt(&password).unwrap_or(password))
 }
 
-fn enpass<S>(password: &String, serializer: S) -> std::result::Result<S::Ok, S::Error>
+fn enpass<S>(
+    password: &String,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    Serialize::serialize(&encrypt(password), serializer)
+    let encrypted = encrypt(password).unwrap_or_else(|_| password.clone());
+    Serialize::serialize(&encrypted, serializer)
 }
 
-// impl display for Remote
 impl std::fmt::Display for Remote {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}@{}:{}", self.user, self.ip, self.port,)
+        if let Some(ref name) = self.name {
+            write!(f, "[{name}] {}@{}:{}", self.user, self.ip, self.port)
+        } else {
+            write!(f, "{}@{}:{}", self.user, self.ip, self.port)
+        }
     }
 }
 
 impl Remote {
-    pub fn add_record(&self) -> Result<usize> {
-        // Force check the ATSH_KEY exist or not
+    pub fn save(&self) -> Result<usize> {
         CONFIG.get_enc_key()?;
         let n = {
             let conn = get_connection().lock();
-            insert(&conn, &self)
-        }
-        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+            insert(&conn, self)?
+        };
         info!(remote = self.to_string(), "success add record");
         Ok(n)
     }
 
-    pub fn delete_record(&self) -> Result<()> {
-        // 删除数据库
+    pub fn delete_from_db(&self) -> Result<()> {
         let conn = get_connection().lock();
-        delete_index(&conn, self.index).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        delete_index(&conn, self.index)?;
         info!(remote = self.to_string(), "success delete record");
         Ok(())
     }
 
-    pub async fn add_auth(&self) -> Result<()> {
-        // check the `ATSH_KEY` exist or not
-        // if not exist, { kind: Other, error: "Authentication failed (username/password)" }
-        let _ = CONFIG.get_enc_key()?;
-        let mut session = SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
-        session.authenticate(CONFIG.read_public()?.as_str()).await?;
-        // 更新数据库
+    pub async fn authorize_public_key(&self) -> Result<()> {
+        CONFIG.get_enc_key()?;
+        let mut session =
+            SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
+        let pub_key = CONFIG.read_public().map_err(|e| AtshError::Config(e.to_string()))?;
+        session.authenticate(pub_key.as_str()).await?;
         if !self.authorized {
-            // update authorized to database
-            // self.authorized = true;
             let conn = get_connection().lock();
             update_authorized(&conn, self.index, true)?;
         }
@@ -97,181 +84,89 @@ impl Remote {
         Ok(())
     }
 
-    pub async fn remove_auth(&self) -> Result<()> {
-        let mut session = SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
-        session.revoke(CONFIG.read_public()?.as_str()).await?;
+    pub async fn deauthorize_public_key(&self) -> Result<()> {
+        CONFIG.get_enc_key()?;
+        let mut session =
+            SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
+        let pub_key = CONFIG.read_public().map_err(|e| AtshError::Config(e.to_string()))?;
+        session.revoke(pub_key.as_str()).await?;
         info!(remote = self.to_string(), "success remove authenticate");
         Ok(())
     }
 
     pub async fn login(&self, reauth: bool) -> Result<()> {
-        // 如果没有认证，或者通过 `--auth` 参数重新认证
         if !self.authorized || reauth {
-            self.add_auth().await?;
+            self.authorize_public_key().await?;
         }
-        let sshkey = CONFIG.get_private();
-        let _ = Command::new("ssh")
-            .arg(format!("{}@{}", self.user, self.ip))
-            .arg("-p")
-            .arg(self.port.to_string())
-            .arg("-i")
-            .arg(sshkey.to_str().unwrap())
-            .status()
-            .await?;
+        let private_key_path = CONFIG
+            .get_private()
+            .to_str()
+            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
+                .await?;
+        session.interactive_login_shell().await?;
         info!(remote = self.to_string(), "success login");
         Ok(())
     }
 
-    async fn execute(&self, program: &str, cmd: &str, stream: u8) -> Result<()> {
-        debug!("execute: {} {}", program, cmd);
-        let args = cmd.split_whitespace().collect::<Vec<_>>();
-        let mut child = if stream == 1 {
-            let mut child = Command::new(program)
-                .args(args)
-                .stdout(std::process::Stdio::piped())
-                .spawn()?;
-
-            let stdout = child.stdout.take().ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stdout is none")
-            })?;
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
-
-            while let Some(line) = lines.next_line().await? {
-                println!("{}", line);
-            }
-            child
-        } else {
-            let mut child = Command::new(program)
-                .args(args)
-                .stderr(std::process::Stdio::piped())
-                .spawn()?;
-            let stderr = child.stderr.take().ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stderr is none")
-            })?;
-            let reader = BufReader::new(stderr);
-            let mut lines = reader.lines();
-
-            while let Some(line) = lines.next_line().await? {
-                println!("{}", line);
-            }
-
-            child
-        };
-
-        let _ = child.wait().await?;
-
-        Ok(())
-    }
-
-    // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa ./test.txt idhyt@1.2.3.4:/tmp
     pub async fn upload(&self, from: &str, to: &str) -> Result<()> {
         if !self.authorized {
             debug!(remote = self.to_string(), "no authorized, try authenticate");
-            self.add_auth().await?;
+            self.authorize_public_key().await?;
         }
-        let args = format!(
-            "-r -P {p} -i {k} {l} {u}@{i}:{r}",
-            p = self.port,
-            k = CONFIG.get_private().display(),
-            l = from,
-            u = self.user,
-            i = self.ip,
-            r = to
-        );
-
-        self.execute("scp", &args, 2).await?;
-        info!(from=?from, to=?to, "susccess upload");
+        let private_key_path = CONFIG
+            .get_private()
+            .to_str()
+            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
+                .await?;
+        session.scp_upload(from, to).await?;
+        info!(from = from, to = to, "success upload");
         Ok(())
     }
 
-    // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa idhyt@1.2.3.4:/tmp/test.txt ./
     pub async fn download(&self, from: &str, to: &str) -> Result<()> {
-        let args = format!(
-            "-r -P {p} -i {k} {u}@{i}:{r} {l}",
-            p = self.port,
-            k = CONFIG.get_private().display(),
-            r = from,
-            u = self.user,
-            i = self.ip,
-            l = to
-        );
-
-        self.execute("scp", &args, 2).await?;
-        info!(from=?from, to=?to, "susccess download");
+        let private_key_path = CONFIG
+            .get_private()
+            .to_str()
+            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
+                .await?;
+        session.scp_download(from, to).await?;
+        info!(from = from, to = to, "success download");
         Ok(())
     }
 
-    async fn is_alive(&self) -> bool {
-        check_port(&self.ip, self.port, None).await
-    }
-
-    // ssh -P 22 -i ~/.ssh/id_rsa user@host 'ls -l /tmp'
     pub async fn run_command(&self, cmd: Option<&str>) -> Result<()> {
-        let args = if let Some(c) = cmd {
-            format!(
-                "-P {p} -i {k} {u}@{i} {c}",
-                p = self.port,
-                k = CONFIG.get_private().display(),
-                u = self.user,
-                i = self.ip,
-                c = c
-            )
-        } else {
-            format!(
-                "-P {p} -i {k} {u}@{i}",
-                p = self.port,
-                k = CONFIG.get_private().display(),
-                u = self.user,
-                i = self.ip,
-            )
-        };
-        self.execute("ssh", &args, 1).await?;
+        let private_key_path = CONFIG
+            .get_private()
+            .to_str()
+            .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, private_key_path, &self.ip, self.port)
+                .await?;
+        session.interactive_shell(80, 24, cmd).await?;
         Ok(())
     }
 }
 
-async fn check_port(host: &str, port: u16, timeout_duration: Option<Duration>) -> bool {
-    let addr = format!("{}:{}", host, port);
-    match tokio::time::timeout(
-        timeout_duration.unwrap_or(Duration::from_secs(3)),
-        TcpStream::connect(&addr),
-    )
-    .await
-    {
-        Ok(Ok(_stream)) => {
-            debug!("✅ {addr} is OPEN");
-            true
-        }
-        Ok(Err(e)) => {
-            warn!("❌ {addr} is CLOSED: {e}");
-            false
-        }
-        Err(e) => {
-            warn!("⏱️ {addr} TIMEOUT {e}");
-            false
-        }
-    }
-}
-
-// #[derive(Serialize, Deserialize)]
 pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {
     fn load() -> Result<Remotes> {
         let conn = get_connection().lock();
-        let remotes = query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+        let remotes = query_all(&conn)?;
         Ok(Remotes(remotes))
     }
-    pub fn get(idx: usize) -> Result<Option<Remote>> {
-        let remote = {
-            let conn = get_connection().lock();
-            query_index(&conn, idx)
-        }
-        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
 
+    pub fn get(idx: usize) -> Result<Option<Remote>> {
+        let conn = get_connection().lock();
+        let remote = query_index(&conn, idx)?;
         if remote.is_some() {
-            info!(index = idx, "susccess get remote");
+            info!(index = idx, "success get remote");
         } else {
             warn!(index = idx, "remote not found");
         }
@@ -279,19 +174,12 @@ impl Remotes {
     }
 
     pub fn try_get(idx: usize) -> Result<Remote> {
-        if let Some(remote) = Remotes::get(idx)? {
-            Ok(remote)
-        } else {
-            Err(Box::new(Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("index {} remote not found", idx),
-            )))
-        }
+        Remotes::get(idx)?.ok_or(AtshError::RemoteNotFound { index: idx })
     }
 
     pub fn get_all() -> Result<Remotes> {
         let remotes = Remotes::load()?;
-        info!("susccess get all remotes {}", remotes.0.len());
+        info!("success get all remotes {}", remotes.0.len());
         Ok(remotes)
     }
 
@@ -304,7 +192,7 @@ impl Remotes {
         note: &Option<impl AsRef<str>>,
     ) -> Result<usize> {
         let remote = Remote {
-            index: 0, // not used
+            index: 0,
             user: user.to_string(),
             password: password.to_string(),
             ip: ip.to_string(),
@@ -313,13 +201,10 @@ impl Remotes {
             name: name.as_ref().map(|n| n.as_ref().to_string()),
             note: note.as_ref().map(|n| n.as_ref().to_string()),
         };
-        // we not authorized the remote server until the first login
-        // remote.authorized();
-        // debug!(remote = remote.to_string(), "add");
-        remote.add_record()
+        remote.save()
     }
 
-    pub async fn delete(indexs: &Vec<usize>) -> Result<usize> {
+    pub async fn delete(indexs: &[usize]) -> Result<usize> {
         let remotes: Vec<Remote> = indexs
             .iter()
             .collect::<std::collections::HashSet<_>>()
@@ -329,17 +214,21 @@ impl Remotes {
         debug!(total = remotes.len(), "delete");
         for remote in remotes.iter() {
             debug!(index = remote.index, "delete");
-            // remove auth
-            if remote.authorized && remote.is_alive().await {
-                remote.remove_auth().await?;
+            if remote.authorized {
+                if let Err(e) = remote.deauthorize_public_key().await {
+                    warn!("failed to revoke auth for remote {}: {}", remote, e);
+                }
             }
-            // delete database
-            remote.delete_record()?;
+            remote.delete_from_db()?;
         }
         Ok(remotes.len())
     }
+}
 
-    pub fn pprint(&self, all: bool) {
+pub struct RemoteDisplay;
+
+impl RemoteDisplay {
+    pub fn pprint(remotes: &[Remote], all: bool) {
         let mut table = Table::new();
         let mut titles = vec!["index", "name", "user", "ip", "port"];
         if all {
@@ -354,27 +243,29 @@ impl Remotes {
                 .collect::<Vec<Cell>>(),
         ));
 
-        for remote in self.0.iter() {
+        for remote in remotes {
             let mut row = vec![
                 remote.index.to_string(),
-                remote.name.clone().unwrap_or_else(|| "".to_string()),
+                remote.name.clone().unwrap_or_default(),
                 remote.user.clone(),
                 remote.ip.clone(),
                 remote.port.to_string(),
             ];
             if all {
-                if let Ok(_) = CONFIG.get_enc_key() {
-                    row.push(remote.password.clone());
-                } else {
-                    row.push(format!(
+                let pwd_display = if CONFIG.get_enc_key().is_ok() {
+                    remote.password.clone()
+                } else if remote.password.len() > 8 {
+                    format!(
                         "{}..{}",
                         &remote.password[..3],
                         &remote.password[remote.password.len() - 5..]
-                    ));
-                }
-                // row.push(remote.password.clone());
+                    )
+                } else {
+                    "****".to_string()
+                };
+                row.push(pwd_display);
                 row.push(remote.authorized.to_string());
-                row.push(remote.note.clone().unwrap_or_else(|| "".to_string()));
+                row.push(remote.note.clone().unwrap_or_default());
             }
             table.add_row(Row::new(
                 row.iter()
@@ -382,7 +273,7 @@ impl Remotes {
                     .collect::<Vec<Cell>>(),
             ));
         }
-        debug!("the remote list total: {}", self.0.len());
+        debug!("the remote list total: {}", remotes.len());
         table.printstd();
     }
 }

@@ -1,21 +1,23 @@
 mod config;
 mod connection;
+mod error;
 mod storage;
 
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub use error::{AtshError, Result};
 
 pub mod atsh {
-    use std::io::{Error, ErrorKind};
     use std::path::Path;
+
     use tracing::debug;
 
-    use crate::connection::{Remotes, SSHSession};
+    use crate::config::CONFIG;
+    use crate::connection::{Remote as RemoteType, RemoteDisplay, Remotes};
+    use crate::connection::SSHSession;
+    use crate::error::{AtshError, Result};
     use crate::storage::log::setup_logging;
 
-    // export the objects to the outside
-    pub use crate::config::CONFIG;
+    pub use crate::config::CONFIG as Config;
     pub use crate::connection::Remote;
-    pub use crate::Result;
 
     pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<()> {
         if let Some(p) = work_dir {
@@ -38,7 +40,7 @@ pub mod atsh {
         Remotes::add(user, password, ip, port, name, note)
     }
 
-    pub fn add_remote(remote: &Remote) -> Result<usize> {
+    pub fn add_remote(remote: &RemoteType) -> Result<usize> {
         add(
             &remote.user,
             &remote.password,
@@ -49,87 +51,53 @@ pub mod atsh {
         )
     }
 
-    pub async fn remove(index: &Vec<usize>) -> Result<usize> {
+    pub async fn remove(index: &[usize]) -> Result<usize> {
         Remotes::delete(index).await
     }
 
-    pub fn get(index: usize) -> Result<Option<Remote>> {
+    pub fn get(index: usize) -> Result<Option<RemoteType>> {
         Remotes::get(index)
     }
 
-    pub fn try_get(index: usize) -> Result<Remote> {
+    pub fn try_get(index: usize) -> Result<RemoteType> {
         Remotes::try_get(index)
     }
 
-    pub fn get_all() -> Result<Vec<Remote>> {
+    pub fn get_all() -> Result<Vec<RemoteType>> {
         let remotes = Remotes::get_all()?;
         Ok(remotes.0)
     }
 
     pub fn pprint(all: bool) -> Result<()> {
         let remotes = Remotes::get_all()?;
-        remotes.pprint(all);
+        RemoteDisplay::pprint(&remotes.0, all);
         Ok(())
     }
 
-    // pub fn list(all: bool) -> Result<()> {
-    //     if all {
-    //         Remotes::list_all()
-    //     } else {
-    //         Remotes::list()
-    //     }
-    // }
-
-    // auth params means try auth against the server
     pub async fn login(index: usize, auth: bool) -> Result<()> {
         let remote = Remotes::try_get(index)?;
         remote.login(auth).await
     }
 
-    // #[deprecated(
-    //     since = "0.1.2",
-    //     note = "This function is not clearly expressed; use `upload/download` instead."
-    // )]
-    // pub fn copy(index: usize, path: &str) -> Result<()> {
-    //     let paths = path.split('=').collect::<Vec<&str>>();
-    //     if paths.len() != 2 {
-    //         return Err(Error::new(
-    //             ErrorKind::InvalidInput,
-    //             "path format error, like `from=to`",
-    //         ));
-    //     }
-    //     let remote = Remotes::try_get(index)?;
-    //     if std::path::PathBuf::from(paths[0]).exists() {
-    //         remote.upload(paths[0], paths[1])
-    //     } else {
-    //         remote.download(paths[0], paths[1])
-    //     }
-    // }
-
-    pub async fn upload(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
-        (path.len() == 2).then_some(()).ok_or_else(|| {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "path format error, like `upload -p /local/path /remote/path`",
-            ))
-        })?;
-
+    pub async fn upload(index: usize, path: &[impl AsRef<str>]) -> Result<()> {
+        if path.len() != 2 {
+            return Err(AtshError::InvalidInput(
+                "path format error, like `upload -p /local/path /remote/path`".into(),
+            ));
+        }
         let (local, remote) = (path[0].as_ref(), path[1].as_ref());
-        Path::new(local).exists().then_some(()).ok_or_else(|| {
-            Box::new(Error::new(ErrorKind::NotFound, "the upload file not found"))
-        })?;
-
+        if !Path::new(local).exists() {
+            return Err(AtshError::InvalidInput("the upload file not found".into()));
+        }
         Remotes::try_get(index)?.upload(local, remote).await
     }
 
-    pub async fn download(index: usize, path: &Vec<impl AsRef<str>>) -> Result<()> {
-        (path.len() == 2).then_some(()).ok_or_else(|| {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "path format error, like `download -p /remote/path /local/path`",
-            ))
-        })?;
-
+    pub async fn download(index: usize, path: &[impl AsRef<str>]) -> Result<()> {
+        if path.len() != 2 {
+            return Err(AtshError::InvalidInput(
+                "path format error, like `download -p /remote/path /local/path`".into(),
+            ));
+        }
         let (remote, local) = (path[0].as_ref(), path[1].as_ref());
         Remotes::try_get(index)?.download(remote, local).await
     }
@@ -141,40 +109,21 @@ pub mod atsh {
         ip: Option<&str>,
         port: Option<u16>,
         cmd: Option<&str>,
-        wh: (Option<u32>, Option<u32>),
+        _wh: (Option<u32>, Option<u32>),
     ) -> Result<()> {
-        let mut session;
         if let Some(i) = index {
             let remote = Remotes::try_get(i)?;
-            // session = SSHSession::new_with_key(
-            //     &remote.user,
-            //     CONFIG.read_private()?.as_str(),
-            //     &remote.ip,
-            //     remote.port,
-            // )
-            // .await?;
-            remote.run_command(cmd).await?;
-            return Ok(());
-        } else {
-            session = SSHSession::new(
-                user.ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "user is required")
-                })?,
-                password.ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "password is required")
-                })?,
-                ip.ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "ip is required")
-                })?,
-                port.ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "port is required")
-                })?,
-            )
-            .await?;
+            return remote.run_command(cmd).await;
         }
-        session
-            .interactive_shell(wh.0.unwrap_or(80), wh.1.unwrap_or(120), cmd)
-            .await?;
+
+        let mut session = SSHSession::new(
+            user.ok_or_else(|| AtshError::InvalidInput("user is required".into()))?,
+            password.ok_or_else(|| AtshError::InvalidInput("password is required".into()))?,
+            ip.ok_or_else(|| AtshError::InvalidInput("ip is required".into()))?,
+            port.ok_or_else(|| AtshError::InvalidInput("port is required".into()))?,
+        )
+        .await?;
+        session.interactive_shell(80, 24, cmd).await?;
         Ok(())
     }
 }

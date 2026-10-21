@@ -21,5 +21,6 @@ categories = [
 # atsh-lib = "0.1.5"
 atsh-lib = {path = "../atsh-lib" }
 clap = { version = "4.6.1", features = ["derive"] }
+rpassword = "7.3"
 tokio = "1.52.3"
 tracing = "0.1.44"
