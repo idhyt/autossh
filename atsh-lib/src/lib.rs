@@ -12,7 +12,6 @@ pub mod atsh {
     use tracing::debug;
 
     use crate::connection::{Remote, RemoteDisplay, Remotes};
-    use crate::connection::SSHSession;
     use crate::context::AppContext;
     use crate::error::{AtshError, Result};
     use crate::storage::log::setup_logging;
@@ -89,7 +88,9 @@ pub mod atsh {
         if !Path::new(local).exists() {
             return Err(AtshError::InvalidInput("the upload file not found".into()));
         }
-        Remotes::try_get(ctx, index)?.upload(ctx, local, remote).await
+        Remotes::try_get(ctx, index)?
+            .upload(ctx, local, remote)
+            .await
     }
 
     pub async fn download(ctx: &AppContext, index: usize, path: &[impl AsRef<str>]) -> Result<()> {
@@ -99,32 +100,18 @@ pub mod atsh {
             ));
         }
         let (remote, local) = (path[0].as_ref(), path[1].as_ref());
-        Remotes::try_get(ctx, index)?.download(ctx, remote, local).await
+        Remotes::try_get(ctx, index)?
+            .download(ctx, remote, local)
+            .await
     }
 
     pub async fn run_command(
         ctx: &AppContext,
-        index: Option<usize>,
-        user: Option<&str>,
-        password: Option<&str>,
-        ip: Option<&str>,
-        port: Option<u16>,
-        cmd: Option<&str>,
+        index: usize,
+        cmd: &str,
         _wh: (Option<u32>, Option<u32>),
     ) -> Result<()> {
-        if let Some(i) = index {
-            let remote = Remotes::try_get(ctx, i)?;
-            return remote.run_command(ctx, cmd).await;
-        }
-
-        let mut session = SSHSession::new(
-            user.ok_or_else(|| AtshError::InvalidInput("user is required".into()))?,
-            password.ok_or_else(|| AtshError::InvalidInput("password is required".into()))?,
-            ip.ok_or_else(|| AtshError::InvalidInput("ip is required".into()))?,
-            port.ok_or_else(|| AtshError::InvalidInput("port is required".into()))?,
-        )
-        .await?;
-        session.interactive_shell(80, 24, cmd).await?;
-        Ok(())
+        let remote = Remotes::try_get(ctx, index)?;
+        remote.run_command(ctx, Some(cmd)).await
     }
 }

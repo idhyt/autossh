@@ -81,24 +81,15 @@ enum Commands {
         #[arg(short, long, default_value = "false")]
         silent: bool,
     },
-    /// Run a command on the remote server by index or ad-hoc credentials.
+    /// Run a command on the remote server by index.
     #[clap(aliases = &["cmd", "run"])]
     Command {
         /// The index of the remote server to run the command on.
         #[arg(short, long)]
-        index: Option<usize>,
-        /// The login user (for ad-hoc connection).
-        #[arg(short, long)]
-        user: Option<String>,
-        /// The login IP address (for ad-hoc connection).
-        #[arg(short, long)]
-        ip: Option<String>,
-        /// The login port.
-        #[arg(short = 'P', long, default_value = "22")]
-        port: u16,
+        index: usize,
         /// The command to run on the remote server.
         #[arg(short, long)]
-        command: Option<String>,
+        command: String,
     },
 }
 
@@ -156,29 +147,8 @@ async fn main() {
             .config()
             .create_sshkey(password.as_deref(), output.as_deref(), !*silent)
             .map(|_| ()),
-        Some(Commands::Command {
-            index,
-            user,
-            ip,
-            port,
-            command,
-        }) => {
-            let password = if user.is_some() {
-                Some(read_password_interactive().expect("failed to read password"))
-            } else {
-                None
-            };
-            run_command(
-                &ctx,
-                *index,
-                user.as_deref(),
-                password.as_deref(),
-                ip.as_deref(),
-                Some(*port),
-                command.as_deref(),
-                (None, None),
-            )
-            .await
+        Some(Commands::Command { index, command }) => {
+            run_command(&ctx, *index, &command, (None, None)).await
         }
         None => {
             // unreachable due to arg_required_else_help, but clap still needs the arm
