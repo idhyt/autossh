@@ -62,8 +62,8 @@ impl SSHSession {
     ) -> Result<SSHSession> {
         use russh::keys::PrivateKeyWithHashAlg;
 
-        let key_content = std::fs::read_to_string(private_key_path)
-            .map_err(|_| AtshError::SshKeyNotFound {
+        let key_content =
+            std::fs::read_to_string(private_key_path).map_err(|_| AtshError::SshKeyNotFound {
                 key_type: "private".into(),
                 path: private_key_path.into(),
             })?;
@@ -113,74 +113,119 @@ impl SSHSession {
         self.execute("echo $HOME").await
     }
 
-    async fn file_contains(&mut self, f: &str, s: &str) -> Result<bool> {
-        let escaped = s.replace('\'', "'\\''");
-        let command = format!(
-            "[ -f {f} ] && grep -qF '{escaped}' {f} && echo Y || echo N"
-        );
-        Ok(self.execute(&command).await? == "Y")
+    async fn read_or_empty_file(&mut self, path: &str) -> Result<String> {
+        use russh_sftp::client::SftpSession;
+        use tokio::io::AsyncReadExt;
+
+        let channel = self.session.channel_open_session().await?;
+        channel.request_subsystem(true, "sftp").await?;
+        let sftp = SftpSession::new(channel.into_stream()).await?;
+
+        if sftp.metadata(path).await.is_err() {
+            return Ok(String::new());
+        }
+
+        let mut file = sftp.open(path).await?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).await?;
+        Ok(buf)
     }
 
     pub async fn authenticate(&mut self, public_key: &str) -> Result<()> {
-        let auth_home = self.get_home().await?;
-        let auth_key = format!("{auth_home}/.ssh/authorized_keys");
+        use russh_sftp::client::SftpSession;
+        use tokio::io::AsyncWriteExt;
+
         let pkey = public_key.trim();
+        let auth_home = self.get_home().await?;
+        let auth_dir = format!("{auth_home}/.ssh");
+        let auth_key = format!("{auth_home}/.ssh/authorized_keys");
 
-        let setup = format!(
-            "[ -d {ah}/.ssh ] || (mkdir -p {ah}/.ssh && chmod 700 {ah}/.ssh); \
-             [ -f {ak} ] || (touch {ak} && chmod 600 {ak})",
-            ah = auth_home,
-            ak = auth_key
-        );
-        self.execute(&setup).await?;
+        let content = self.read_or_empty_file(&auth_key).await?;
 
-        if self.file_contains(&auth_key, pkey).await? {
+        if content.lines().any(|l| l.trim() == pkey) {
             debug!("public key already present in authorized_keys, skipping");
             return Ok(());
         }
 
-        let escaped_key = pkey.replace('\'', "'\\''");
-        let command = format!("echo '{escaped_key}' >> {ak}", ak = auth_key);
-        self.execute(&command).await?;
+        let channel = self.session.channel_open_session().await?;
+        channel.request_subsystem(true, "sftp").await?;
+        let sftp = SftpSession::new(channel.into_stream()).await?;
 
-        if !self.file_contains(&auth_key, pkey).await? {
-            return Err(AtshError::AuthorizeFailed(
-                "failed to add public key to authorized_keys".into(),
-            ));
+        let mut attrs = russh_sftp::protocol::FileAttributes::empty();
+        attrs.permissions = Some(0o600);
+
+        let _ = sftp.create_dir(&auth_dir).await;
+
+        let mut file = if content.is_empty() {
+            sftp.open_with_flags_and_attributes(
+                &auth_key,
+                russh_sftp::protocol::OpenFlags::CREATE | russh_sftp::protocol::OpenFlags::WRITE,
+                attrs.clone(),
+            )
+            .await?
+        } else {
+            sftp.open_with_flags(
+                &auth_key,
+                russh_sftp::protocol::OpenFlags::APPEND | russh_sftp::protocol::OpenFlags::WRITE,
+            )
+            .await?
+        };
+
+        if !content.is_empty() {
+            file.write_all(b"\n").await?;
         }
+        file.write_all(pkey.as_bytes()).await?;
+        file.shutdown().await?;
+
         Ok(())
     }
 
     pub async fn revoke(&mut self, public_key: &str) -> Result<()> {
+        use russh_sftp::client::SftpSession;
+        use tokio::io::AsyncWriteExt;
+
+        let pkey = public_key.trim();
         let auth_home = self.get_home().await?;
         let auth_key = format!("{auth_home}/.ssh/authorized_keys");
-        let pkey = public_key.trim();
 
-        if !self.file_contains(&auth_key, pkey).await? {
+        let content = self.read_or_empty_file(&auth_key).await?;
+        if !content.lines().any(|l| l.trim() == pkey) {
             debug!("public key not found in authorized_keys, nothing to revoke");
             return Ok(());
         }
 
-        let escaped_key = pkey.replace('\'', "'\\''");
-        let command = format!(
-            "grep -vF '{escaped_key}' {ak} > {ak}.tmp && mv {ak}.tmp {ak} && chmod 600 {ak}",
-            ak = auth_key
-        );
-        self.execute(&command).await?;
+        let filtered: String = content
+            .lines()
+            .filter(|l| l.trim() != pkey)
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        if self.file_contains(&auth_key, pkey).await? {
-            return Err(AtshError::RevokeFailed(
-                "failed to revoke public key from authorized_keys".into(),
-            ));
+        let channel = self.session.channel_open_session().await?;
+        channel.request_subsystem(true, "sftp").await?;
+        let sftp = SftpSession::new(channel.into_stream()).await?;
+
+        if filtered.is_empty() {
+            sftp.remove_file(&auth_key).await?;
+        } else {
+            let mut attrs = russh_sftp::protocol::FileAttributes::empty();
+            attrs.permissions = Some(0o600);
+            let mut file = sftp
+                .open_with_flags_and_attributes(
+                    &auth_key,
+                    russh_sftp::protocol::OpenFlags::CREATE
+                        | russh_sftp::protocol::OpenFlags::TRUNCATE
+                        | russh_sftp::protocol::OpenFlags::WRITE,
+                    attrs,
+                )
+                .await?;
+            file.write_all(filtered.as_bytes()).await?;
+            file.shutdown().await?;
         }
         Ok(())
     }
 
-    pub async fn scp_upload(
-        &mut self,
-        local_path: &str,
-        remote_path: &str,
-    ) -> Result<()> {
+    pub async fn scp_upload(&mut self, local_path: &str, remote_path: &str) -> Result<()> {
         use indicatif::{ProgressBar, ProgressStyle};
         use russh_sftp::client::SftpSession;
         use tokio::io::AsyncWriteExt;
@@ -206,7 +251,8 @@ impl SSHSession {
         let mut written: u64 = 0;
         while written < total {
             let end = std::cmp::min(written + chunk_size, total);
-            file.write_all(&data[written as usize..end as usize]).await?;
+            file.write_all(&data[written as usize..end as usize])
+                .await?;
             written = end;
             bar.set_position(written);
         }
@@ -218,11 +264,7 @@ impl SSHSession {
         Ok(())
     }
 
-    pub async fn scp_download(
-        &mut self,
-        remote_path: &str,
-        local_path: &str,
-    ) -> Result<()> {
+    pub async fn scp_download(&mut self, remote_path: &str, local_path: &str) -> Result<()> {
         use indicatif::{ProgressBar, ProgressStyle};
         use russh_sftp::client::SftpSession;
         use tokio::io::AsyncReadExt;
@@ -257,7 +299,11 @@ impl SSHSession {
         tokio::fs::write(&local_path, data).await?;
         bar.finish_with_message(format!("{} downloaded", remote_path));
 
-        debug!(local = local_path, remote = remote_path, "download complete");
+        debug!(
+            local = local_path,
+            remote = remote_path,
+            "download complete"
+        );
         Ok(())
     }
 
@@ -272,8 +318,7 @@ impl SSHSession {
 
     pub async fn interactive_login_shell(&mut self) -> Result<()> {
         let (width, height) = term_size::dimensions().unwrap_or((80, 24));
-        self.run_pty(width as u32, height as u32, None, false)
-            .await
+        self.run_pty(width as u32, height as u32, None, false).await
     }
 
     /// Shared PTY-based bidirectional I/O loop.
