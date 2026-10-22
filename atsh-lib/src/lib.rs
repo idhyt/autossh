@@ -11,10 +11,12 @@ pub mod atsh {
     use std::path::Path;
     use tracing::debug;
 
-    use crate::connection::{RemoteDisplay, Remotes};
+    use crate::connection::RemoteDisplay;
     use crate::context::AppContext;
     use crate::error::{AtshError, Result};
     use crate::storage::log::setup_logging;
+
+    pub use crate::connection::{Remote, Remotes};
 
     pub fn initialize(work_dir: Option<impl AsRef<Path>>) -> Result<AppContext> {
         let ctx = match work_dir {
@@ -88,5 +90,17 @@ pub mod atsh {
     ) -> Result<()> {
         let remote = Remotes::try_get(ctx, index)?;
         remote.run_command(ctx, Some(cmd)).await
+    }
+
+    pub fn get_remotes(ctx: &AppContext) -> Result<Remotes> {
+        Remotes::get_all(ctx)
+    }
+
+    pub fn get_remote(ctx: &AppContext, index: usize) -> Result<Remote> {
+        let all = get_remotes(ctx)?;
+        all.0
+            .into_iter()
+            .find(|r| r.index == index)
+            .ok_or(AtshError::RemoteNotFound { index })
     }
 }
