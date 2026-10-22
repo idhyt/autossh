@@ -1,271 +1,173 @@
 use prettytable::{Cell, Row, Table};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// use std::io::{BufRead, BufReader};
-use std::io::Error;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::net::TcpStream;
-use tokio::process::Command;
-use tokio::time::Duration;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::rssh::SSHSession;
-use crate::config::CONFIG;
-use crate::storage::db::{
-    delete_index, get_connection, insert, query_all, query_index, update_authorized,
-};
-use crate::storage::secure::{decrypt, encrypt};
-use crate::Result;
+use crate::context::AppContext;
+use crate::error::{AtshError, Result};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Remote {
-    /// the index of the remote server.
-    // #[serde(rename = "idx")]
     pub index: usize,
-    /// the login user.
     pub user: String,
-    /// the login password.
-    #[serde(deserialize_with = "depass", serialize_with = "enpass")]
     pub password: String,
-    /// the login id address.
     pub ip: String,
-    /// the login port.
     pub port: u16,
-    /// have the authorized to login.
     pub authorized: bool,
-    /// the alias name for the login.
     pub name: Option<String>,
-    /// the note for the server.
     pub note: Option<String>,
 }
 
-fn depass<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let password = String::deserialize(deserializer)?;
-    Ok(decrypt(&password))
-}
-
-fn enpass<S>(password: &String, serializer: S) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    Serialize::serialize(&encrypt(password), serializer)
-}
-
-// impl display for Remote
 impl std::fmt::Display for Remote {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}@{}:{}", self.user, self.ip, self.port,)
+        if let Some(ref name) = self.name {
+            write!(f, "[{name}] {}@{}:{}", self.user, self.ip, self.port)
+        } else {
+            write!(f, "{}@{}:{}", self.user, self.ip, self.port)
+        }
     }
 }
 
 impl Remote {
-    pub fn add_record(&self) -> Result<usize> {
-        // Force check the ATSH_KEY exist or not
-        CONFIG.get_enc_key()?;
-        let n = {
-            let conn = get_connection().lock();
-            insert(&conn, &self)
-        }
-        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
-        info!(remote = self.to_string(), "success add record");
-        Ok(n)
+    pub fn save(&self, ctx: &AppContext) -> Result<usize> {
+        ctx.require_enc_key()?;
+        let mut remotes = ctx.load_remotes()?;
+        let index = remotes.iter().map(|r| r.index).max().unwrap_or(0) + 1;
+        let mut record = self.clone();
+        record.index = index;
+        remotes.push(record);
+        ctx.save_remotes(&remotes)?;
+        info!(remote = self.to_string(), "added record");
+        Ok(index)
     }
 
-    pub fn delete_record(&self) -> Result<()> {
-        // 删除数据库
-        let conn = get_connection().lock();
-        delete_index(&conn, self.index).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
-        info!(remote = self.to_string(), "success delete record");
+    pub fn delete_from_db(&self, ctx: &AppContext) -> Result<()> {
+        let mut remotes = ctx.load_remotes()?;
+        remotes.retain(|r| r.index != self.index);
+        ctx.save_remotes(&remotes)?;
+        info!(remote = self.to_string(), "deleted record");
         Ok(())
     }
 
-    pub async fn add_auth(&self) -> Result<()> {
-        // check the `ATSH_KEY` exist or not
-        // if not exist, { kind: Other, error: "Authentication failed (username/password)" }
-        let _ = CONFIG.get_enc_key()?;
-        let mut session = SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
-        session.authenticate(CONFIG.read_public()?.as_str()).await?;
-        // 更新数据库
+    pub async fn authorize_public_key(&self, ctx: &AppContext) -> Result<()> {
+        info!(remote = self.to_string(), "authorizing public key");
+        let password = &self.password;
+        let mut session = SSHSession::new(&self.user, password, &self.ip, self.port).await?;
+        let pub_key = ctx.read_public_key()?;
+        session.authenticate(pub_key.as_str()).await?;
         if !self.authorized {
-            // update authorized to database
-            // self.authorized = true;
-            let conn = get_connection().lock();
-            update_authorized(&conn, self.index, true)?;
+            let mut remotes = ctx.load_remotes()?;
+            if let Some(r) = remotes.iter_mut().find(|r| r.index == self.index) {
+                r.authorized = true;
+            }
+            ctx.save_remotes(&remotes)?;
         }
-        info!(remote = self.to_string(), "success add authenticate");
+        info!(remote = self.to_string(), "public key authorized");
         Ok(())
     }
 
-    pub async fn remove_auth(&self) -> Result<()> {
+    pub async fn deauthorize_public_key(&self, ctx: &AppContext) -> Result<()> {
+        info!(remote = self.to_string(), "revoking public key");
         let mut session = SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
-        session.revoke(CONFIG.read_public()?.as_str()).await?;
-        info!(remote = self.to_string(), "success remove authenticate");
+        let pub_key = ctx.read_public_key()?;
+        session.revoke(pub_key.as_str()).await?;
+        info!(remote = self.to_string(), "public key revoked");
         Ok(())
     }
 
-    pub async fn login(&self, reauth: bool) -> Result<()> {
-        // 如果没有认证，或者通过 `--auth` 参数重新认证
+    pub async fn login(&self, ctx: &AppContext, reauth: bool) -> Result<()> {
+        info!(remote = self.to_string(), "logging in");
         if !self.authorized || reauth {
-            self.add_auth().await?;
+            self.authorize_public_key(ctx).await?;
         }
-        let sshkey = CONFIG.get_private();
-        let _ = Command::new("ssh")
-            .arg(format!("{}@{}", self.user, self.ip))
-            .arg("-p")
-            .arg(self.port.to_string())
-            .arg("-i")
-            .arg(sshkey.to_str().unwrap())
-            .status()
-            .await?;
-        info!(remote = self.to_string(), "success login");
+        let key_path = ctx.private_key_path()?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, &key_path, &self.ip, self.port).await?;
+        let result = session.interactive_login_shell().await;
+        match result {
+            Ok(()) => info!(remote = self.to_string(), "login session ended"),
+            Err(e) => {
+                warn!(remote = self.to_string(), error = %e, "login session terminated unexpectedly");
+                return Err(e);
+            }
+        }
         Ok(())
     }
 
-    async fn scp(&self, args: &Vec<&str>) -> Result<()> {
-        // 如果没有认证，则先认证
+    pub async fn upload(&self, ctx: &AppContext, from: &str, to: &str) -> Result<()> {
+        info!(from = from, to = to, remote = self.to_string(), "uploading");
         if !self.authorized {
-            debug!(remote = self.to_string(), "no authorized, try authenticate");
-            self.add_auth().await?;
+            debug!(
+                remote = self.to_string(),
+                "not authorized, attempting authentication"
+            );
+            self.authorize_public_key(ctx).await?;
         }
-        // info!("\n🚨 scp {}\n🚨 input `y` to run and other to cancel.", cmd);
-        // let mut read = String::new();
-        // std::io::stdin().read_line(&mut read)?;
-        // let read = read.trim();
-        // if read == "y" {}
-        debug!(args=?args, "scp");
-
-        let mut child = Command::new("scp")
-            .args(args)
-            .stderr(std::process::Stdio::piped())
-            .spawn()?;
-
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "stderr is none"))?;
-
-        let reader = BufReader::new(stderr);
-        let mut lines = reader.lines();
-
-        while let Some(line) = lines.next_line().await? {
-            println!("{}", line);
-        }
-
-        let _ = child.wait().await?;
-
+        let key_path = ctx.private_key_path()?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, &key_path, &self.ip, self.port).await?;
+        session.scp_upload(from, to).await?;
+        info!(from = from, to = to, "uploaded");
         Ok(())
     }
 
-    pub async fn upload(&self, from: &str, to: &str) -> Result<()> {
-        // debug!(from = ?from, to=?to, "upload");
-        // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa ./test.txt idhyt@1.2.3.4:/tmp
-        let port = self.port.to_string();
-        let remote = format!("{}@{}:{}", self.user, self.ip, to);
-        let cmd = vec![
-            "-r",
-            "-P",
-            &port,
-            "-i",
-            CONFIG.get_private().to_str().unwrap(),
-            from,
-            &remote,
-        ];
-        self.scp(&cmd).await?;
-        info!(from=?from, to=?to, "susccess upload");
+    pub async fn download(&self, ctx: &AppContext, from: &str, to: &str) -> Result<()> {
+        info!(
+            from = from,
+            to = to,
+            remote = self.to_string(),
+            "downloading"
+        );
+        let key_path = ctx.private_key_path()?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, &key_path, &self.ip, self.port).await?;
+        session.scp_download(from, to).await?;
+        info!(from = from, to = to, "downloaded");
         Ok(())
     }
 
-    pub async fn download(&self, from: &str, to: &str) -> Result<()> {
-        // debug!(from = ?from, to=?to, "download");
-        // scp -r -P 22 -i /home/idhyt/.ssh/id_rsa idhyt@1.2.3.4:/tmp/test.txt ./
-        let port = self.port.to_string();
-        let remote = format!("{}@{}:{}", self.user, self.ip, from);
-        let cmd = vec![
-            "-r",
-            "-P",
-            &port,
-            "-i",
-            CONFIG.get_private().to_str().unwrap(),
-            &remote,
-            to,
-        ];
-        self.scp(&cmd).await?;
-        info!(from=?from, to=?to, "susccess download");
+    pub async fn run_command(&self, ctx: &AppContext, cmd: Option<&str>) -> Result<()> {
+        info!(remote = self.to_string(), command = cmd, "running command");
+        let key_path = ctx.private_key_path()?;
+        let mut session =
+            SSHSession::connect_with_key(&self.user, &key_path, &self.ip, self.port).await?;
+        session.interactive_shell(80, 24, cmd).await?;
+        info!(remote = self.to_string(), "command finished");
         Ok(())
-    }
-
-    async fn is_alive(&self) -> bool {
-        check_port(&self.ip, self.port, None).await
     }
 }
 
-async fn check_port(host: &str, port: u16, timeout_duration: Option<Duration>) -> bool {
-    let addr = format!("{}:{}", host, port);
-    match tokio::time::timeout(
-        timeout_duration.unwrap_or(Duration::from_secs(3)),
-        TcpStream::connect(&addr),
-    )
-    .await
-    {
-        Ok(Ok(_stream)) => {
-            debug!("✅ {addr} is OPEN");
-            true
-        }
-        Ok(Err(e)) => {
-            warn!("❌ {addr} is CLOSED: {e}");
-            false
-        }
-        Err(e) => {
-            warn!("⏱️ {addr} TIMEOUT {e}");
-            false
-        }
-    }
-}
-
-// #[derive(Serialize, Deserialize)]
 pub struct Remotes(pub Vec<Remote>);
 
 impl Remotes {
-    fn load() -> Result<Remotes> {
-        let conn = get_connection().lock();
-        let remotes = query_all(&conn).map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
+    fn load(ctx: &AppContext) -> Result<Remotes> {
+        let remotes = ctx.load_remotes()?;
         Ok(Remotes(remotes))
     }
-    pub fn get(idx: usize) -> Result<Option<Remote>> {
-        let remote = {
-            let conn = get_connection().lock();
-            query_index(&conn, idx)
-        }
-        .map_err(|e| Error::new(std::io::ErrorKind::Other, e))?;
 
+    pub fn get(ctx: &AppContext, idx: usize) -> Result<Option<Remote>> {
+        let remotes = ctx.load_remotes()?;
+        let remote = remotes.into_iter().find(|r| r.index == idx);
         if remote.is_some() {
-            info!(index = idx, "susccess get remote");
+            debug!(index = idx, "found remote");
         } else {
             warn!(index = idx, "remote not found");
         }
         Ok(remote)
     }
 
-    pub fn try_get(idx: usize) -> Result<Remote> {
-        if let Some(remote) = Remotes::get(idx)? {
-            Ok(remote)
-        } else {
-            Err(Box::new(Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("index {} remote not found", idx),
-            )))
-        }
+    pub fn try_get(ctx: &AppContext, idx: usize) -> Result<Remote> {
+        Remotes::get(ctx, idx)?.ok_or(AtshError::RemoteNotFound { index: idx })
     }
 
-    pub fn get_all() -> Result<Remotes> {
-        let remotes = Remotes::load()?;
-        info!("susccess get all remotes {}", remotes.0.len());
+    pub fn get_all(ctx: &AppContext) -> Result<Remotes> {
+        let remotes = Remotes::load(ctx)?;
+        info!(count = remotes.0.len(), "loaded remotes");
         Ok(remotes)
     }
 
     pub fn add(
+        ctx: &AppContext,
         user: &str,
         password: &str,
         ip: &str,
@@ -274,7 +176,7 @@ impl Remotes {
         note: &Option<impl AsRef<str>>,
     ) -> Result<usize> {
         let remote = Remote {
-            index: 0, // not used
+            index: 0,
             user: user.to_string(),
             password: password.to_string(),
             ip: ip.to_string(),
@@ -283,33 +185,34 @@ impl Remotes {
             name: name.as_ref().map(|n| n.as_ref().to_string()),
             note: note.as_ref().map(|n| n.as_ref().to_string()),
         };
-        // we not authorized the remote server until the first login
-        // remote.authorized();
-        // debug!(remote = remote.to_string(), "add");
-        remote.add_record()
+        remote.save(ctx)
     }
 
-    pub async fn delete(indexs: &Vec<usize>) -> Result<usize> {
+    pub async fn delete(ctx: &AppContext, indexs: &[usize]) -> Result<usize> {
         let remotes: Vec<Remote> = indexs
             .iter()
             .collect::<std::collections::HashSet<_>>()
             .iter()
-            .filter_map(|&idx| Remotes::get(*idx).transpose())
+            .filter_map(|&idx| Remotes::get(ctx, *idx).transpose())
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        debug!(total = remotes.len(), "delete");
+        debug!(total = remotes.len(), "deleting remotes");
         for remote in remotes.iter() {
-            debug!(index = remote.index, "delete");
-            // remove auth
-            if remote.authorized && remote.is_alive().await {
-                remote.remove_auth().await?;
+            debug!(index = remote.index, "deleting remote");
+            if remote.authorized {
+                if let Err(e) = remote.deauthorize_public_key(ctx).await {
+                    warn!("failed to revoke auth for remote {}: {}", remote, e);
+                }
             }
-            // delete database
-            remote.delete_record()?;
+            remote.delete_from_db(ctx)?;
         }
         Ok(remotes.len())
     }
+}
 
-    pub fn pprint(&self, all: bool) {
+pub struct RemoteDisplay;
+
+impl RemoteDisplay {
+    pub fn pprint(ctx: &AppContext, remotes: &[Remote], all: bool) {
         let mut table = Table::new();
         let mut titles = vec!["index", "name", "user", "ip", "port"];
         if all {
@@ -324,27 +227,30 @@ impl Remotes {
                 .collect::<Vec<Cell>>(),
         ));
 
-        for remote in self.0.iter() {
+        let has_key = ctx.enc_key().is_some();
+        for remote in remotes {
             let mut row = vec![
                 remote.index.to_string(),
-                remote.name.clone().unwrap_or_else(|| "".to_string()),
+                remote.name.clone().unwrap_or_default(),
                 remote.user.clone(),
                 remote.ip.clone(),
                 remote.port.to_string(),
             ];
             if all {
-                if let Ok(_) = CONFIG.get_enc_key() {
-                    row.push(remote.password.clone());
-                } else {
-                    row.push(format!(
+                let pwd_display = if has_key {
+                    remote.password.clone()
+                } else if remote.password.len() > 8 {
+                    format!(
                         "{}..{}",
                         &remote.password[..3],
                         &remote.password[remote.password.len() - 5..]
-                    ));
-                }
-                // row.push(remote.password.clone());
+                    )
+                } else {
+                    "****".to_string()
+                };
+                row.push(pwd_display);
                 row.push(remote.authorized.to_string());
-                row.push(remote.note.clone().unwrap_or_else(|| "".to_string()));
+                row.push(remote.note.clone().unwrap_or_default());
             }
             table.add_row(Row::new(
                 row.iter()
@@ -352,7 +258,7 @@ impl Remotes {
                     .collect::<Vec<Cell>>(),
             ));
         }
-        debug!("the remote list total: {}", self.0.len());
+        debug!(total = remotes.len(), "printed remote list");
         table.printstd();
     }
 }

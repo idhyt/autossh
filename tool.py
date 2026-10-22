@@ -101,7 +101,7 @@ def create_database(data: Dict, output: Path):
     cursor = conn.cursor()
     cursor.executemany(
         '''
-        INSERT OR REPLACE INTO records 
+        INSERT OR REPLACE INTO records
         (idx, user, password, ip, port, authorized, name, note)
         VALUES(?,?,?,?,?,?,?,?)
     ''', remotes_data)
@@ -145,6 +145,66 @@ def toml2db(*, input: str, output: Optional[str] = None):
         config = tomli.load(f)
     create_config(config, output_path)
     create_database(config, output_path)
+
+
+@cli.command()
+@click.option('-i',
+              '--input',
+              required=True,
+              help='Path to the atsh.db database file')
+@click.option(
+    '-o',
+    '--output',
+    required=False,
+    help='Output directory for config.toml, default to the db directory')
+def db2toml(*, input: str, output: Optional[str] = None):
+    """Migrate records from atsh.db (SQLite) into config.toml (TOML)."""
+    db_path = Path(input)
+    if not db_path.is_file():
+        print("[-] input database not exists")
+        sys.exit(1)
+
+    output_dir = db_path.parent if not output else Path(output)
+    output_dir = output_dir.absolute()
+    if not output_dir.is_dir():
+        output_dir.mkdir(parents=True)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT idx, user, password, ip, port, authorized, name, note FROM records"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    remotes = []
+    for idx, user, password, ip, port, authorized, name, note in rows:
+        record = {
+            'index': int(idx),
+            'user': user,
+            'password': password or '',
+            'ip': ip or '',
+            'port': int(port) if port is not None else 22,
+            'authorized': bool(authorized),
+        }
+        # TOML has no null; omit optional fields when absent.
+        if name is not None:
+            record['name'] = name
+        if note is not None:
+            record['note'] = note
+        remotes.append(record)
+    config_path = output_dir / 'config.toml'
+    # Preserve any existing config (e.g. sshkey) when present.
+    existing = {}
+    if config_path.is_file():
+        with open(config_path, 'rb') as f:
+            existing = tomli.load(f)
+    existing['remotes'] = remotes
+
+    with open(config_path, 'wb') as f:
+        tomli_w.dump(existing, f)
+
+    print(f"[+] success write {len(remotes)} records to {config_path}")
 
 
 if __name__ == '__main__':

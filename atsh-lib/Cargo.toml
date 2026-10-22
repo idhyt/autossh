@@ -1,6 +1,6 @@
 [package]
 name = "atsh-lib"
-version = "0.1.7"
+version = "0.2.0"
 edition = "2021"
 authors = ["idhyt3r@gmail.com"]
 license = "MIT"
@@ -22,13 +22,15 @@ path = "src/lib.rs"
 [dependencies]
 base64 = "0.22.1"
 chacha20poly1305 = "0.10.1"
-parking_lot = "0.12.5"
+indicatif = "0.17"
 prettytable = "0.10.0"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
-russh = { version = "0.60.2", default-features = false, features = ["ring"] }
+russh = { version = "0.60.2", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = "2.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-tokio = { version = "1.52.3", features = ["process"] }
+term_size = "0.3"
+thiserror = "2.0"
+tokio = { version = "1.52.3", features = ["process", "io-std", "fs"] }
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-appender = "0.2.5"

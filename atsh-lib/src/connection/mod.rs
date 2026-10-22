@@ -1,6 +1,6 @@
 mod remote;
 mod rssh;
-// mod ssh;
 
 pub use remote::Remote;
+pub use remote::RemoteDisplay;
 pub(crate) use remote::Remotes;
