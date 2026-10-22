@@ -1,6 +1,6 @@
 use russh::client::{self, AuthResult, Handle};
 use russh::keys::ssh_key;
-use russh::{ChannelMsg, Disconnect};
+use russh::{ChannelMsg, Disconnect, Pty};
 use std::sync::Arc;
 use tracing::{debug, error};
 
@@ -21,6 +21,28 @@ impl client::Handler for ClientHandler {
 
 pub struct SSHSession {
     session: Handle<ClientHandler>,
+}
+
+/// RAII guard that switches the terminal into raw mode for the lifetime of an
+/// interactive session and restores it (even on early return) when dropped.
+///
+/// Enabling raw mode is best-effort: it fails on non-TTY stdin (pipes, CI,
+/// certain IDEs), in which case we simply skip it and run in the default mode.
+struct RawModeGuard;
+
+impl RawModeGuard {
+    fn enable() -> Self {
+        if let Err(e) = crossterm::terminal::enable_raw_mode() {
+            debug!(error = %e, "failed to enable raw mode; continuing in cooked mode");
+        }
+        Self
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
 }
 
 fn handle_auth_result(auth_result: AuthResult, method_name: &str) -> Result<()> {
@@ -345,7 +367,18 @@ impl SSHSession {
                 height,
                 0,
                 0,
-                &[],
+                &[
+                    (Pty::ECHO, 1),
+                    (Pty::ICANON, 1),
+                    (Pty::ISIG, 1),
+                    (Pty::IUTF8, 1),
+                    (Pty::IXON, 0),
+                    (Pty::IXOFF, 0),
+                    (Pty::OPOST, 1),
+                    (Pty::ONLCR, 1),
+                    (Pty::TTY_OP_ISPEED, 38400),
+                    (Pty::TTY_OP_OSPEED, 38400),
+                ],
             )
             .await?;
 
@@ -354,6 +387,8 @@ impl SSHSession {
         } else {
             channel.request_shell(true).await?;
         }
+
+        let _raw = RawModeGuard::enable();
 
         let (tx, mut rx) = mpsc::channel::<Vec<u8>>(32);
         let mut stdout = tokio::io::stdout();

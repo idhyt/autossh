@@ -32,6 +32,7 @@ term_size = "0.3"
 thiserror = "2.0"
 tokio = { version = "1.52.3", features = ["process", "io-std", "fs"] }
 toml = "1.1.2"
+crossterm = "0.29.0"
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = [
