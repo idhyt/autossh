@@ -40,9 +40,8 @@ impl AppContext {
     }
 
     fn detect_enc_key() -> Option<String> {
-        std::env::var("ATSH_KEY")
-            .ok()
-            .or_else(|| std::env::var("ASKEY").ok())
+        std::env::var("ATSH_KEY").ok()
+        // .or_else(|| std::env::var("ASKEY").ok())
     }
 
     pub fn work_dir(&self) -> &Path {
@@ -61,14 +60,16 @@ impl AppContext {
         self.enc_key().ok_or(AtshError::EncKeyNotSet)
     }
 
-    /// Encrypt a plaintext password using the configured key.
+    /// Encrypt a plaintext password. Requires `ATSH_KEY`.
     pub fn encrypt_password(&self, plain: &str) -> Result<String> {
-        encrypt(plain, self.enc_key())
+        let key = self.require_enc_key()?;
+        encrypt(plain, Some(key))
     }
 
-    /// Decrypt an encrypted password using the configured key.
+    /// Decrypt an encrypted password. Requires `ATSH_KEY`.
     pub fn decrypt_password(&self, enc: &str) -> Result<String> {
-        decrypt(enc, self.enc_key())
+        let key = self.require_enc_key()?;
+        decrypt(enc, Some(key))
     }
 
     /// Read the local public key content.
@@ -78,7 +79,13 @@ impl AppContext {
 
     /// Get the path to the local private key.
     pub fn private_key_path(&self) -> Result<String> {
-        let path = self.inner.config.lock().unwrap().get_private().to_path_buf();
+        let path = self
+            .inner
+            .config
+            .lock()
+            .unwrap()
+            .get_private()
+            .to_path_buf();
         path.to_str()
             .map(|s| s.to_string())
             .ok_or_else(|| AtshError::InvalidInput("invalid private key path".into()))
@@ -98,27 +105,18 @@ impl AppContext {
             .create_sshkey(password, output, interactive)
     }
 
-    /// Load all remotes, decrypting passwords.
+    /// Load all remotes. Passwords are kept encrypted in memory;
+    /// decrypt lazily via [`Self::decrypt_password`] when needed.
     pub fn load_remotes(&self) -> Result<Vec<Remote>> {
         let config = self.inner.config.lock().unwrap();
-        let mut remotes = config.remotes.clone();
-        drop(config);
-        for r in remotes.iter_mut() {
-            r.password = self.decrypt_password(&r.password)?;
-        }
-        Ok(remotes)
+        Ok(config.remotes.clone())
     }
 
-    /// Persist remotes, encrypting passwords.
+    /// Persist remotes as-is. Passwords are expected to already be encrypted
+    /// (encryption happens at the point a plaintext is introduced, e.g. `add`).
     pub fn save_remotes(&self, remotes: &[Remote]) -> Result<()> {
         let mut config = self.inner.config.lock().unwrap();
-        let mut out: Vec<Remote> = Vec::with_capacity(remotes.len());
-        for r in remotes {
-            let mut c = r.clone();
-            c.password = self.encrypt_password(&c.password)?;
-            out.push(c);
-        }
-        config.remotes = out;
+        config.remotes = remotes.to_vec();
         drop(config);
         self.save_config()
     }

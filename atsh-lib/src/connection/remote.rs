@@ -29,18 +29,6 @@ impl std::fmt::Display for Remote {
 }
 
 impl Remote {
-    pub fn save(&self, ctx: &AppContext) -> Result<usize> {
-        ctx.require_enc_key()?;
-        let mut remotes = ctx.load_remotes()?;
-        let index = remotes.iter().map(|r| r.index).max().unwrap_or(0) + 1;
-        let mut record = self.clone();
-        record.index = index;
-        remotes.push(record);
-        ctx.save_remotes(&remotes)?;
-        info!(remote = self.to_string(), "added record");
-        Ok(index)
-    }
-
     pub fn delete_from_db(&self, ctx: &AppContext) -> Result<()> {
         let mut remotes = ctx.load_remotes()?;
         remotes.retain(|r| r.index != self.index);
@@ -51,8 +39,8 @@ impl Remote {
 
     pub async fn authorize_public_key(&self, ctx: &AppContext) -> Result<()> {
         info!(remote = self.to_string(), "authorizing public key");
-        let password = &self.password;
-        let mut session = SSHSession::new(&self.user, password, &self.ip, self.port).await?;
+        let password = ctx.decrypt_password(&self.password)?;
+        let mut session = SSHSession::new(&self.user, &password, &self.ip, self.port).await?;
         let pub_key = ctx.read_public_key()?;
         session.authenticate(pub_key.as_str()).await?;
         if !self.authorized {
@@ -68,7 +56,8 @@ impl Remote {
 
     pub async fn deauthorize_public_key(&self, ctx: &AppContext) -> Result<()> {
         info!(remote = self.to_string(), "revoking public key");
-        let mut session = SSHSession::new(&self.user, &self.password, &self.ip, self.port).await?;
+        let password = ctx.decrypt_password(&self.password)?;
+        let mut session = SSHSession::new(&self.user, &password, &self.ip, self.port).await?;
         let pub_key = ctx.read_public_key()?;
         session.revoke(pub_key.as_str()).await?;
         info!(remote = self.to_string(), "public key revoked");
@@ -175,17 +164,22 @@ impl Remotes {
         name: &Option<impl AsRef<str>>,
         note: &Option<impl AsRef<str>>,
     ) -> Result<usize> {
+        let mut remotes = ctx.load_remotes()?;
+        let index = remotes.iter().map(|r| r.index).max().unwrap_or(0) + 1;
         let remote = Remote {
-            index: 0,
+            index,
             user: user.to_string(),
-            password: password.to_string(),
+            password: ctx.encrypt_password(password)?,
             ip: ip.to_string(),
             port,
             authorized: false,
             name: name.as_ref().map(|n| n.as_ref().to_string()),
             note: note.as_ref().map(|n| n.as_ref().to_string()),
         };
-        remote.save(ctx)
+        remotes.push(remote);
+        ctx.save_remotes(&remotes)?;
+        info!(index = index, user = user, ip = ip, "added record");
+        Ok(index)
     }
 
     pub async fn delete(ctx: &AppContext, indexs: &[usize]) -> Result<usize> {
@@ -238,15 +232,18 @@ impl RemoteDisplay {
             ];
             if all {
                 let pwd_display = if has_key {
-                    remote.password.clone()
-                } else if remote.password.len() > 8 {
-                    format!(
-                        "{}..{}",
-                        &remote.password[..3],
-                        &remote.password[remote.password.len() - 5..]
-                    )
+                    ctx.decrypt_password(&remote.password)
+                        .unwrap_or_else(|_| "***".to_string())
                 } else {
-                    "****".to_string()
+                    if remote.password.len() > 8 {
+                        format!(
+                            "{}..{}",
+                            &remote.password[..3],
+                            &remote.password[remote.password.len() - 5..]
+                        )
+                    } else {
+                        remote.password.clone()
+                    }
                 };
                 row.push(pwd_display);
                 row.push(remote.authorized.to_string());
