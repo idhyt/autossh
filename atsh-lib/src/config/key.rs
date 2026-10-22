@@ -16,35 +16,19 @@ impl SSHKey {
         SSHKey { public, private }
     }
 
-    pub fn get_public(&self) -> &Path {
-        self.public.as_path()
-    }
-
     pub fn get_private(&self) -> &Path {
         self.private.as_path()
     }
 
-    fn read_key(&self, key_type: &str) -> Result<String> {
-        let key = match key_type {
-            "public" => self.get_public(),
-            "private" => self.get_private(),
-            _ => return Err(AtshError::InvalidInput("unknown key type".into())),
-        };
+    pub fn read_public(&self) -> Result<String> {
+        let key = self.public.as_path();
         if !key.is_file() {
             return Err(AtshError::SshKeyNotFound {
-                key_type: key_type.to_string(),
+                key_type: "public".to_string(),
                 path: key.display().to_string(),
             });
         }
         Ok(std::fs::read_to_string(key)?)
-    }
-
-    pub fn read_public(&self) -> Result<String> {
-        self.read_key("public")
-    }
-
-    pub fn read_private(&self) -> Result<String> {
-        self.read_key("private")
     }
 }
 

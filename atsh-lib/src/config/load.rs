@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use super::key::{create_sshkey, SSHKey};
 use crate::connection::Remote;
@@ -37,29 +37,12 @@ impl Config {
         }
     }
 
-    pub fn get_public(&self) -> &Path {
-        self.sshkey.get_public()
-    }
-
     pub fn get_private(&self) -> &Path {
         self.sshkey.get_private()
     }
 
-    pub fn try_get_private(&self) -> Result<&Path> {
-        let private = self.sshkey.get_private();
-        if !private.exists() {
-            warn!(file = ?private, "ssh key missing, creating one");
-            create_sshkey(Option::<&str>::None, private, false)?;
-        }
-        Ok(private)
-    }
-
     pub fn read_public(&self) -> Result<String> {
         self.sshkey.read_public()
-    }
-
-    pub fn read_private(&self) -> Result<String> {
-        self.sshkey.read_private()
     }
 
     pub fn create_sshkey(

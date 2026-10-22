@@ -20,9 +20,6 @@ pub enum AtshError {
     #[error("ATSH_KEY not set. Export `ATSH_KEY` to protect password")]
     EncKeyNotSet,
 
-    #[error("ATSH_KEY must be at least 5 characters")]
-    EncKeyTooShort,
-
     #[error("Decryption failed: data corrupted or wrong ATSH_KEY")]
     DecryptionFailed,
 
@@ -31,12 +28,6 @@ pub enum AtshError {
 
     #[error("Authentication failed: {0}")]
     AuthFailed(String),
-
-    #[error("Authorization failed: {0}")]
-    AuthorizeFailed(String),
-
-    #[error("Revoke failed: {0}")]
-    RevokeFailed(String),
 
     #[error("SSH key not found: {key_type} at {path}")]
     SshKeyNotFound { key_type: String, path: String },

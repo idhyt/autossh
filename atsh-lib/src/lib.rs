@@ -11,7 +11,7 @@ pub mod atsh {
     use std::path::Path;
     use tracing::debug;
 
-    use crate::connection::{Remote, RemoteDisplay, Remotes};
+    use crate::connection::{RemoteDisplay, Remotes};
     use crate::context::AppContext;
     use crate::error::{AtshError, Result};
     use crate::storage::log::setup_logging;
@@ -38,33 +38,8 @@ pub mod atsh {
         Remotes::add(ctx, user, password, ip, port, name, note)
     }
 
-    pub fn add_remote(ctx: &AppContext, remote: &Remote) -> Result<usize> {
-        add(
-            ctx,
-            &remote.user,
-            &remote.password,
-            &remote.ip,
-            remote.port,
-            &remote.name,
-            &remote.note,
-        )
-    }
-
     pub async fn remove(ctx: &AppContext, index: &[usize]) -> Result<usize> {
         Remotes::delete(ctx, index).await
-    }
-
-    pub fn get(ctx: &AppContext, index: usize) -> Result<Option<Remote>> {
-        Remotes::get(ctx, index)
-    }
-
-    pub fn try_get(ctx: &AppContext, index: usize) -> Result<Remote> {
-        Remotes::try_get(ctx, index)
-    }
-
-    pub fn get_all(ctx: &AppContext) -> Result<Vec<Remote>> {
-        let remotes = Remotes::get_all(ctx)?;
-        Ok(remotes.0)
     }
 
     pub fn pprint(ctx: &AppContext, all: bool) -> Result<()> {
