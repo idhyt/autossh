@@ -1,8 +1,11 @@
 use clap::{Parser, Subcommand};
+use inquire::Select;
 use std::path::PathBuf;
 use tracing::error;
 
-use atsh_lib::atsh::{add, download, initialize, login, pprint, remove, run_command, upload};
+use atsh_lib::atsh::{
+    add, download, get_remotes, initialize, login, pprint, remove, run_command, upload,
+};
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -40,9 +43,9 @@ enum Commands {
     },
     /// Login to the remote server by index.
     Login {
-        /// The index of the remote server.
+        /// The index of the remote server. Omit to select interactively.
         #[arg(short, long)]
-        index: usize,
+        index: Option<usize>,
         /// Force authorize the remote server before login.
         #[arg(long, default_value = "false")]
         auth: bool,
@@ -98,7 +101,7 @@ enum Commands {
     author = "idhyt",
     version = env!("BUILD_VERSION"),
     about = "atsh - SSH connection manager with automatic passwordless login",
-    arg_required_else_help = true,
+    // arg_required_else_help = true,
 )]
 struct Cli {
     #[command(subcommand)]
@@ -136,7 +139,10 @@ async fn main() {
             Ok(_) => pprint(&ctx, false),
             Err(e) => Err(e),
         },
-        Some(Commands::Login { index, auth }) => login(&ctx, *index, *auth).await,
+        Some(Commands::Login { index, auth }) => match index {
+            Some(i) => login(&ctx, *i, *auth).await,
+            None => interactive_login(&ctx, *auth).await,
+        },
         Some(Commands::Upload { index, path }) => upload(&ctx, *index, path).await,
         Some(Commands::Download { index, path }) => download(&ctx, *index, path).await,
         Some(Commands::SshKeygen {
@@ -149,15 +155,71 @@ async fn main() {
         Some(Commands::Command { index, command }) => {
             run_command(&ctx, *index, &command, (None, None)).await
         }
-        None => {
-            // unreachable due to arg_required_else_help, but clap still needs the arm
-            pprint(&ctx, false)
-        }
+        None => interactive_login(&ctx, false).await,
     };
 
     if let Err(e) = result {
         error!(error = %e, "command failed");
         std::process::exit(1);
+    }
+}
+
+async fn interactive_login(ctx: &atsh_lib::AppContext, auth: bool) -> atsh_lib::Result<()> {
+    let remotes = get_remotes(ctx)?;
+    if remotes.0.is_empty() {
+        eprintln!("no remote servers configured. add one with `atsh add`");
+        std::process::exit(1);
+    }
+
+    fn render(remote: &atsh_lib::atsh::Remote, max_target: usize) -> String {
+        let auth_icon = if remote.authorized {
+            "\x1b[32m✔\x1b[0m"
+        } else {
+            "\x1b[31m✖\x1b[0m"
+        };
+        let plain_target = format!("{}@{}:{}", remote.user, remote.ip, remote.port);
+        let padded = format!("{:<width$}", plain_target, width = max_target);
+        let at_pos = remote.user.len();
+        let colon_pos = at_pos + 1 + remote.ip.len();
+        let target = format!(
+            "\x1b[33m{}\x1b[0m@\x1b[35m{}\x1b[0m:\x1b[90m{}\x1b[0m{}",
+            &padded[..at_pos],
+            &padded[at_pos + 1..colon_pos],
+            &padded[colon_pos + 1..plain_target.len()],
+            &padded[plain_target.len()..],
+        );
+        let name_str = match &remote.name {
+            Some(name) if !name.is_empty() => format!("    \x1b[36m{}\x1b[0m", name),
+            _ => String::new(),
+        };
+        format!(
+            "[{:>3}] {}  👤 {}{}",
+            remote.index, auth_icon, target, name_str
+        )
+    }
+
+    let max_target = remotes
+        .0
+        .iter()
+        .map(|r| format!("{}@{}:{}", r.user, r.ip, r.port).len())
+        .max()
+        .unwrap_or(20);
+
+    let options: Vec<String> = remotes.0.iter().map(|r| render(r, max_target)).collect();
+    let selection = Select::new("🚀 Select a server to login:", options)
+        .with_page_size(20)
+        .prompt()
+        .map_err(|e| atsh_lib::AtshError::InvalidInput(e.to_string()))?;
+
+    let matched = remotes
+        .0
+        .iter()
+        .position(|r| render(r, max_target) == selection);
+    match matched {
+        Some(i) => login(ctx, remotes.0[i].index, auth).await,
+        None => Err(atsh_lib::AtshError::InvalidInput(
+            "selection not found".into(),
+        )),
     }
 }
 
