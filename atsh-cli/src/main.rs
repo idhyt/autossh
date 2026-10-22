@@ -144,7 +144,6 @@ async fn main() {
             output,
             silent,
         }) => ctx
-            .config()
             .create_sshkey(password.as_deref(), output.as_deref(), !*silent)
             .map(|_| ()),
         Some(Commands::Command { index, command }) => {

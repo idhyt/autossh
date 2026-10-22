@@ -23,9 +23,7 @@ path = "src/lib.rs"
 base64 = "0.22.1"
 chacha20poly1305 = "0.10.1"
 indicatif = "0.17"
-parking_lot = "0.12.5"
 prettytable = "0.10.0"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
 russh = { version = "0.60.2", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "2.0.1"
 serde = { version = "1.0.228", features = ["derive"] }

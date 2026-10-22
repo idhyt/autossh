@@ -3,11 +3,14 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
 use super::key::{create_sshkey, SSHKey};
+use crate::connection::Remote;
 use crate::error::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub sshkey: SSHKey,
+    #[serde(default)]
+    pub remotes: Vec<Remote>,
 }
 
 impl Config {
@@ -30,6 +33,7 @@ impl Config {
                 work_dir.join("id_rsa.pub"),
                 work_dir.join("id_rsa"),
             ),
+            remotes: Vec::new(),
         }
     }
 
