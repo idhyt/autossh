@@ -3,6 +3,7 @@ use std::path::Path;
 
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
+    filter::LevelFilter,
     fmt::{self, time::LocalTime},
     layer::SubscriberExt,
     util::SubscriberInitExt,
@@ -18,9 +19,11 @@ pub fn setup_logging(work_dir: &Path) -> Result<(), Error> {
         .add_directive("russh=info".parse().expect("static directive"));
 
     // Show source location only when the effective level is debug or lower.
+    // NOTE: LevelFilter's Ord impl sorts alphabetically, not by severity,
+    // so `level <= LevelFilter::DEBUG` is unreliable. Use matches! instead.
     let show_location = filter
         .max_level_hint()
-        .is_none_or(|level| level <= tracing_subscriber::filter::LevelFilter::DEBUG);
+        .is_some_and(|level| matches!(level, LevelFilter::TRACE | LevelFilter::DEBUG));
 
     let subscriber = tracing_subscriber::registry()
         .with(filter)
