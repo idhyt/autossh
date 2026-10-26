@@ -14,6 +14,10 @@ atsh add -u devsecops -i 1.2.3.4 -n production
 # login (first time authorizes the public key, then passwordless)
 atsh login -i 1
 
+# login with select interactively
+atsh
+atsh login
+
 # list all servers
 atsh ls
 
