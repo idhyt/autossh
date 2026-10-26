@@ -7,15 +7,22 @@ fn get_version() -> String {
         return version;
     }
 
-    let output = Command::new("git")
+    let version = env!("CARGO_PKG_VERSION");
+    match Command::new("git")
         .args(["show", "-s", "--format=%h %cs"])
         .output()
         .ok()
-        .unwrap();
-    assert!(output.status.success());
-    let value = String::from_utf8(output.stdout).unwrap();
-    let commit = value.trim();
-    format!("{} ({})", env!("CARGO_PKG_VERSION"), commit)
+    {
+        Some(output) if output.status.success() => {
+            let value = String::from_utf8(output.stdout).unwrap();
+            let commit = value.trim();
+            format!("{} ({})", version, commit)
+        }
+        _ => {
+            println!("not a git repository, using package version only");
+            version.to_string()
+        }
+    }
 }
 
 fn main() {
